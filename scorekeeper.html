@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>計分板</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+:root {
+  --bg: #0a0a0f;
+  --surface: #13131a;
+  --border: #2a2a3a;
+  --accent: #00e5ff;
+  --accent2: #ff3d6b;
+  --text: #e8e8f0;
+  --text-dim: #666680;
+  --win: #aaff00;
+  --lose: #ff3d6b;
+  --cell-bg: #1a1a26;
+  --cell-hover: #22223a;
+  --radius: 10px;
+  --lp-dur: 600ms;
+  --col-w: 96px;   /* width of each player column */
+  --label-w: 52px; /* width of round-label column */
+  --del-w: 44px;   /* width of delete-btn column */
+  --header-h: 60px;/* height of sticky name header */
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'Noto Sans TC', sans-serif;
+  min-height: 100vh; overflow: hidden; /* page scroll managed by #scroll-body */
+  -webkit-user-select: none; user-select: none;
+}
+
+/* ── Setup ── */
+#setup-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100vh; padding: 40px 20px; gap: 32px;
+}
+.title-block h1 {
+  font-family: 'Bebas Neue', sans-serif; font-size: clamp(52px,12vw,96px);
+  letter-spacing: 6px; color: var(--accent); text-shadow: 0 0 30px rgba(0,229,255,.4); line-height: 1;
+}
+.title-block p { color: var(--text-dim); text-align: center; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; }
+.count-btns { display: flex; gap: 10px; }
+.count-btn {
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 2px solid var(--border); background: var(--surface); color: var(--text-dim);
+  font-family: 'Bebas Neue', sans-serif; font-size: 24px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all .2s;
+}
+.count-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,.1); box-shadow: 0 0 16px rgba(0,229,255,.3); }
+.player-count-selector { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.player-count-selector label { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
+.start-btn {
+  padding: 16px 56px; background: var(--accent); color: #000; border: none;
+  border-radius: var(--radius); font-family: 'Bebas Neue', sans-serif; font-size: 22px;
+  letter-spacing: 3px; cursor: pointer; box-shadow: 0 0 24px rgba(0,229,255,.35);
+}
+.start-btn:active { opacity: .85; }
+
+/* ── Game Screen ── */
+#game-screen {
+  display: none; flex-direction: column;
+  height: 100vh; overflow: hidden;
+}
+
+/* Top bar */
+.game-header {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface);
+  z-index: 20;
+}
+.game-header h2 { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 3px; color: var(--accent); }
+.round-info { font-size: 12px; letter-spacing: 1px; color: var(--text-dim); text-transform: uppercase; }
+.header-btns { display: flex; gap: 8px; }
+.icon-btn {
+  padding: 8px 14px; border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); border-radius: 6px; font-size: 12px; letter-spacing: 1px;
+  text-transform: uppercase; cursor: pointer; font-family: 'Noto Sans TC', sans-serif;
+}
+.icon-btn:active { color: var(--accent); border-color: var(--accent); }
+.icon-btn.danger:active { color: var(--accent2); border-color: var(--accent2); }
+
+/* Pick Banner */
+#pick-banner {
+  flex-shrink: 0; display: none;
+  background: rgba(0,229,255,.07); border-bottom: 1px solid rgba(0,229,255,.2);
+  padding: 9px 16px; text-align: center;
+  font-size: 12px; letter-spacing: 2px; color: var(--accent); text-transform: uppercase;
+  animation: bannerPulse 2s ease-in-out infinite;
+}
+@keyframes bannerPulse { 0%,100%{opacity:.7} 50%{opacity:1} }
+#pick-banner.show { display: block; }
+
+/* ── STICKY NAME HEADER ──
+   Sits outside the scroll area, always visible.
+   Uses the same column widths as the table below.
+*/
+#name-header {
+  flex-shrink: 0;
+  display: flex; align-items: stretch;
+  background: var(--bg);
+  border-bottom: 2px solid var(--border);
+  overflow: hidden; /* clips to match horizontal scroll */
+}
+#name-header-inner {
+  display: flex; align-items: center;
+  /* will be translated horizontally in sync with #scroll-body scrollLeft */
+}
+.nh-spacer-left  { flex-shrink: 0; width: var(--label-w); }
+.nh-spacer-right { flex-shrink: 0; width: var(--del-w); }
+.nh-cell {
+  flex-shrink: 0;
+  width: var(--col-w); padding: 8px 4px;
+  text-align: center; cursor: pointer;
+  border-right: 1px solid var(--border);
+}
+.nh-cell:last-of-type { border-right: none; }
+.nh-cell:active .player-name { color: var(--accent); }
+.player-name { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.edit-hint { font-size: 9px; color: var(--text-dim); margin-top: 2px; letter-spacing: 1px; }
+
+/* ── Scrollable body (vertical + horizontal) ── */
+#scroll-body {
+  flex: 1; overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Score table ── */
+.score-table {
+  border-collapse: separate; border-spacing: 4px;
+  width: max-content; min-width: 100%;
+  padding: 12px 0 12px 0;
+}
+.round-label {
+  color: var(--text-dim); font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+  padding: 0 8px; white-space: nowrap; vertical-align: middle; text-align: right;
+  width: var(--label-w); min-width: var(--label-w);
+}
+
+/* Score cells */
+.score-cell {
+  background: var(--cell-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 4px; text-align: center; width: var(--col-w); min-width: var(--col-w);
+  vertical-align: middle; position: relative; overflow: hidden;
+  transition: border-color .15s, background .15s;
+}
+.score-cell.win-cell    { border-color: var(--win);  background: rgba(170,255,0,.07); }
+.score-cell.lose-cell   { border-color: var(--lose); background: rgba(255,61,107,.07); }
+.score-cell.waiting     { border-style: dashed; cursor: pointer; }
+.score-cell.waiting:active { background: var(--cell-hover); }
+.score-cell.pick-mode {
+  border-color: var(--accent); border-style: dashed; background: rgba(0,229,255,.04);
+  animation: pickPulse 1.3s ease-in-out infinite; cursor: pointer;
+}
+@keyframes pickPulse { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 14px rgba(0,229,255,.35)} }
+.score-cell.pick-mode:active { background: rgba(0,229,255,.15); animation: none; }
+.score-cell.win-pending { border-color: var(--win); border-style: dashed; background: rgba(170,255,0,.04); }
+
+/* Double-tap flash */
+.score-cell.dtap-flash { background: rgba(0,229,255,.18) !important; transition: background .05s; }
+
+.cell-value { font-family: 'Bebas Neue', sans-serif; font-size: 22px; line-height: 1; }
+.cell-value.positive { color: var(--win); }
+.cell-value.negative { color: var(--lose); }
+.cell-value.zero     { color: var(--text-dim); }
+.cell-hint { font-size: 9px; color: var(--text-dim); margin-top: 3px; letter-spacing: .5px; opacity: .6; }
+
+/* Delete button */
+.del-cell { vertical-align: middle; padding: 0 4px; width: var(--del-w); min-width: var(--del-w); }
+.del-btn {
+  width: 34px; height: 34px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--cell-bg);
+  color: var(--text-dim); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden; transition: border-color .15s;
+}
+.lp-bar-del {
+  position: absolute; bottom: 0; left: 0; height: 3px;
+  background: var(--accent2); width: 0; border-radius: 0 0 8px 8px;
+}
+.del-btn.lp-del-active { border-color: var(--accent2); color: var(--accent2); }
+.del-btn.lp-del-active .lp-bar-del { width: 100%; transition: width var(--lp-dur) linear; }
+
+/* Total row */
+.total-row td { padding-top: 6px; }
+.total-cell {
+  background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius);
+  padding: 12px 4px; text-align: center; vertical-align: middle;
+}
+.total-label { color: var(--text-dim); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; padding: 0 8px; text-align: right; vertical-align: middle; }
+.total-value { font-family: 'Bebas Neue', sans-serif; font-size: 28px; line-height: 1; }
+.total-value.pos  { color: var(--win);  text-shadow: 0 0 12px rgba(170,255,0,.4); }
+.total-value.neg  { color: var(--lose); text-shadow: 0 0 12px rgba(255,61,107,.4); }
+.total-value.zero { color: var(--text-dim); }
+
+/* Add round bar */
+.add-round-bar {
+  flex-shrink: 0;
+  padding: 10px 16px; border-top: 1px solid var(--border); background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+}
+.add-round-btn {
+  padding: 11px 32px; background: transparent; border: 2px solid var(--accent); color: var(--accent);
+  border-radius: var(--radius); font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 3px; cursor: pointer;
+}
+.add-round-btn:active { background: rgba(0,229,255,.1); }
+
+/* ── Numpad ── */
+#numpad-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.78); backdrop-filter: blur(4px);
+  align-items: flex-end; justify-content: center;
+}
+#numpad-overlay.open { display: flex; }
+.numpad-panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px 20px 0 0; padding: 20px; width: 100%; max-width: 440px;
+  animation: slideUp .22s ease;
+}
+@keyframes slideUp { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
+.numpad-info { text-align: center; margin-bottom: 16px; }
+.np-who { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
+.np-disp {
+  font-family: 'Bebas Neue', sans-serif; font-size: 52px; letter-spacing: 2px;
+  min-height: 58px; line-height: 1; color: var(--lose);
+}
+.np-disp.empty { color: var(--text-dim); font-size: 36px; }
+.numpad-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 10px; }
+.np-btn {
+  padding: 18px 10px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--cell-bg); color: var(--text);
+  font-family: 'Bebas Neue', sans-serif; font-size: 26px; cursor: pointer; text-align: center;
+  touch-action: manipulation;
+}
+.np-btn:active { background: var(--cell-hover); }
+.np-btn.del  { color: var(--accent2); font-size: 20px; }
+.np-btn.zero { grid-column: span 2; }
+.numpad-actions { display: flex; gap: 8px; }
+.np-cancel {
+  flex: 1; padding: 15px; border-radius: 10px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-dim);
+  font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px; cursor: pointer;
+  touch-action: manipulation;
+}
+.np-cancel:active { color: var(--accent2); border-color: var(--accent2); }
+.np-confirm {
+  flex: 2; padding: 15px; border-radius: 10px; border: none; background: var(--accent); color: #000;
+  font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 3px; cursor: pointer;
+  touch-action: manipulation;
+}
+.np-confirm:active { opacity: .8; }
+
+/* ── Name edit ── */
+#name-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(4px);
+  align-items: center; justify-content: center; padding: 20px;
+}
+#name-overlay.open { display: flex; }
+.name-panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 28px; width: 100%; max-width: 340px; animation: fadeIn .2s ease;
+}
+@keyframes fadeIn { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:scale(1)} }
+.name-panel h3 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 3px; color: var(--accent); margin-bottom: 16px; text-align: center; }
+.name-panel input {
+  width: 100%; background: var(--cell-bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; color: var(--text); font-size: 16px; outline: none;
+  font-family: 'Noto Sans TC', sans-serif; margin-bottom: 16px; transition: border-color .15s;
+  -webkit-user-select: text; user-select: text;
+}
+.name-panel input:focus { border-color: var(--accent); }
+.name-actions { display: flex; gap: 8px; }
+.name-cancel { flex:1; padding:12px; border:1px solid var(--border); background:transparent; color:var(--text-dim); border-radius:8px; font-size:14px; cursor:pointer; font-family:'Noto Sans TC',sans-serif; }
+.name-confirm { flex:2; padding:12px; border:none; background:var(--accent); color:#000; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; font-family:'Noto Sans TC',sans-serif; }
+
+/* ── Menu overlay ── */
+#menu-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
+  align-items: flex-end; justify-content: center;
+}
+#menu-overlay.open { display: flex; }
+.menu-panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px 20px 0 0; padding: 20px 20px 32px;
+  width: 100%; max-width: 440px;
+  animation: slideUp .22s ease;
+}
+.menu-title {
+  font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 3px;
+  color: var(--text-dim); text-align: center; margin-bottom: 16px;
+}
+.menu-item {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; padding: 16px;
+  background: var(--cell-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-size: 15px; font-family: 'Noto Sans TC', sans-serif;
+  cursor: pointer; margin-bottom: 10px; text-align: left;
+  transition: border-color .15s;
+}
+.menu-item:last-child { margin-bottom: 0; }
+.menu-item:active { border-color: var(--accent); }
+.menu-item.danger:active { border-color: var(--accent2); color: var(--accent2); }
+.menu-item .mi-icon { font-size: 20px; width: 28px; text-align: center; }
+.menu-item .mi-label { flex: 1; }
+.menu-item .mi-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.menu-cancel {
+  display: block; width: 100%; padding: 15px;
+  background: transparent; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-dim); font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px;
+  cursor: pointer; margin-top: 12px;
+}
+.menu-cancel:active { border-color: var(--accent2); color: var(--accent2); }
+
+/* ── Toast ── */
+#toast {
+  position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 10px 20px; border-radius: 20px; font-size: 13px; color: var(--text);
+  opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 200; white-space: nowrap;
+}
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Setup -->
+<div id="setup-screen">
+  <div class="title-block"><h1>SCORE</h1><p>多人計分板</p></div>
+  <div class="player-count-selector">
+    <label>選擇人數</label>
+    <div class="count-btns" id="count-btns"></div>
+  </div>
+  <button class="start-btn" onclick="startGame()">開始遊戲</button>
+</div>
+
+<!-- Game -->
+<div id="game-screen">
+
+  <!-- Fixed top bar -->
+  <div class="game-header">
+    <div>
+      <h2>SCORE</h2>
+      <div class="round-info" id="round-info">第 0 局</div>
+    </div>
+    <div class="header-btns">
+      <button class="icon-btn" onclick="openMenu()">⋯ 選項</button>
+    </div>
+  </div>
+
+  <!-- Pick winner banner -->
+  <div id="pick-banner">🏆 點選本局贏家</div>
+
+  <!-- Sticky name header (always visible, syncs horizontal scroll) -->
+  <div id="name-header">
+    <div id="name-header-inner">
+      <div class="nh-spacer-left"></div>
+      <!-- player cells injected by JS -->
+      <div class="nh-spacer-right"></div>
+    </div>
+  </div>
+
+  <!-- Scrollable score area -->
+  <div id="scroll-body">
+    <table class="score-table" id="score-table"></table>
+  </div>
+
+  <!-- Add round bar -->
+  <div class="add-round-bar">
+    <button class="add-round-btn" onclick="addRound()">＋ 新增一局</button>
+  </div>
+</div>
+
+<!-- Numpad -->
+<div id="numpad-overlay">
+  <div class="numpad-panel">
+    <div class="numpad-info">
+      <div class="np-who" id="np-who"></div>
+      <div class="np-disp empty" id="np-disp">—</div>
+    </div>
+    <div class="numpad-grid">
+      <button class="np-btn" ontouchstart="npInput('1')" onclick="npInput('1')">1</button>
+      <button class="np-btn" ontouchstart="npInput('2')" onclick="npInput('2')">2</button>
+      <button class="np-btn" ontouchstart="npInput('3')" onclick="npInput('3')">3</button>
+      <button class="np-btn" ontouchstart="npInput('4')" onclick="npInput('4')">4</button>
+      <button class="np-btn" ontouchstart="npInput('5')" onclick="npInput('5')">5</button>
+      <button class="np-btn" ontouchstart="npInput('6')" onclick="npInput('6')">6</button>
+      <button class="np-btn" ontouchstart="npInput('7')" onclick="npInput('7')">7</button>
+      <button class="np-btn" ontouchstart="npInput('8')" onclick="npInput('8')">8</button>
+      <button class="np-btn" ontouchstart="npInput('9')" onclick="npInput('9')">9</button>
+      <button class="np-btn del" ontouchstart="npDel()" onclick="npDel()">⌫</button>
+      <button class="np-btn zero" ontouchstart="npInput('0')" onclick="npInput('0')">0</button>
+    </div>
+    <div class="numpad-actions">
+      <button class="np-cancel" ontouchstart="closeNumpad()" onclick="closeNumpad()">取消</button>
+      <button class="np-confirm" ontouchstart="confirmNumpad()" onclick="confirmNumpad()">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- Name Edit -->
+<div id="name-overlay">
+  <div class="name-panel">
+    <h3>編輯名稱</h3>
+    <input type="text" id="name-input" placeholder="輸入玩家名稱" maxlength="10">
+    <div class="name-actions">
+      <button class="name-cancel" onclick="closeNameEdit()">取消</button>
+      <button class="name-confirm" onclick="confirmNameEdit()">確認</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Menu overlay -->
+<div id="menu-overlay">
+  <div class="menu-panel">
+    <div class="menu-title">選項</div>
+    <button class="menu-item danger" onclick="menuReset()">
+      <span class="mi-icon">🔄</span>
+      <div class="mi-label">
+        <div>重置所有分數</div>
+        <div class="mi-sub">清空全部記錄，重新開始</div>
+      </div>
+    </button>
+    <button class="menu-item" onclick="menuNewGame()">
+      <span class="mi-icon">👥</span>
+      <div class="mi-label">
+        <div>重新設定人數</div>
+        <div class="mi-sub">回到開始畫面選人數</div>
+      </div>
+    </button>
+    <button class="menu-cancel" onclick="closeMenu()">取消</button>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+let G = { playerCount: 4, players: [], rounds: [] };
+let np = { ri: -1, pi: -1, digits: '', isEdit: false };
+let nameEditIdx = -1;
+
+// double-tap tracking per cell (key = "ri-pi")
+const dtapMap = {};
+
+// delete-button long-press
+let delLpTimer = null, delLpEl = null;
+const LP_MS = 600;
+
+// numpad double-fire guard
+let npLastTime = 0;
+function npGuard() {
+  const now = Date.now();
+  if (now - npLastTime < 300) return true;
+  npLastTime = now;
+  return false;
+}
+
+// ── Setup ──────────────────────────────────────────────────────────
+(function() {
+  const wrap = document.getElementById('count-btns');
+  for (let i = 2; i <= 6; i++) {
+    const b = document.createElement('button');
+    b.className = 'count-btn' + (i === 4 ? ' active' : '');
+    b.textContent = i;
+    b.addEventListener('click', () => selectCount(i));
+    wrap.appendChild(b);
+  }
+})();
+
+function selectCount(n) {
+  G.playerCount = n;
+  document.querySelectorAll('.count-btn').forEach((b, i) => b.classList.toggle('active', i + 2 === n));
+}
+
+function startGame() {
+  G.players = Array.from({ length: G.playerCount }, (_, i) => ({ name: `Player ${i+1}`, total: 0 }));
+  G.rounds = [];
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display = 'flex';
+  buildNameHeader();
+  pushRound();
+
+  // Sync horizontal scroll between #scroll-body and #name-header
+  document.getElementById('scroll-body').addEventListener('scroll', syncHeader);
+}
+
+// ── Sticky name header ─────────────────────────────────────────────
+function buildNameHeader() {
+  const inner = document.getElementById('name-header-inner');
+  // Clear old player cells (keep spacers)
+  inner.querySelectorAll('.nh-cell').forEach(el => el.remove());
+  const spacerR = inner.querySelector('.nh-spacer-right');
+
+  G.players.forEach((p, pi) => {
+    const cell = document.createElement('div');
+    cell.className = 'nh-cell';
+    cell.dataset.pi = pi;
+    cell.innerHTML = `<div class="player-name">${esc(p.name)}</div><div class="edit-hint">點擊改名</div>`;
+    addTap(cell, () => openNameEdit(pi));
+    inner.insertBefore(cell, spacerR);
+  });
+}
+
+function updateNameHeader() {
+  // Update names in header without full rebuild
+  document.querySelectorAll('.nh-cell').forEach(cell => {
+    const pi = parseInt(cell.dataset.pi);
+    cell.querySelector('.player-name').textContent = G.players[pi].name;
+  });
+}
+
+function syncHeader() {
+  const sb = document.getElementById('scroll-body');
+  document.getElementById('name-header-inner').style.transform = `translateX(-${sb.scrollLeft}px)`;
+}
+
+// ── Rounds ─────────────────────────────────────────────────────────
+function pushRound() {
+  G.rounds.push({ winner: null, scores: new Array(G.playerCount).fill(null) });
+  render();
+  document.getElementById('round-info').textContent = `第 ${G.rounds.length} 局`;
+}
+
+function addRound() {
+  const last = G.rounds[G.rounds.length - 1];
+  if (last && !isComplete(last)) { showToast('請先完成本局記分'); return; }
+  pushRound();
+  // scroll to bottom
+  setTimeout(() => {
+    const sb = document.getElementById('scroll-body');
+    sb.scrollTop = sb.scrollHeight;
+  }, 50);
+}
+
+function isComplete(r) {
+  return r.winner !== null && r.scores.every(s => s !== null);
+}
+
+function resetGame() {
+  G.players.forEach(p => p.total = 0);
+  G.rounds = [];
+  pushRound();
+}
+
+// ── Menu ──────────────────────────────────────────────────────────
+function openMenu() { document.getElementById('menu-overlay').classList.add('open'); }
+function closeMenu() { document.getElementById('menu-overlay').classList.remove('open'); }
+
+function menuReset() {
+  closeMenu();
+  // small delay so menu closes visually before confirm
+  setTimeout(() => {
+    if (!confirm('確定要清空所有分數重新開始嗎？')) return;
+    resetGame();
+  }, 200);
+}
+
+function menuNewGame() {
+  closeMenu();
+  setTimeout(() => {
+    if (!confirm('確定要回到設定畫面嗎？目前分數將會清除。')) return;
+    G.players = []; G.rounds = [];
+    document.getElementById('game-screen').style.display = 'none';
+    document.getElementById('setup-screen').style.display = 'flex';
+  }, 200);
+}
+
+function deleteRound(ri) {
+  const r = G.rounds[ri];
+  r.scores.forEach((v, i) => { if (v !== null) G.players[i].total -= v; });
+  G.rounds.splice(ri, 1);
+  if (G.rounds.length === 0) pushRound();
+  else render();
+  document.getElementById('round-info').textContent = `第 ${G.rounds.length} 局`;
+  showToast(`已刪除第 ${ri + 1} 局`);
+}
+
+// ── Pick winner ────────────────────────────────────────────────────
+function pickWinner(ri, pi) {
+  const r = G.rounds[ri];
+  if (r.winner !== null) return;
+  r.winner = pi;
+  render();
+  showToast(`🏆 ${G.players[pi].name} 是本局贏家，請輸入輸家分數`);
+}
+
+// ── Auto-fill winner ───────────────────────────────────────────────
+function tryAutoFill(ri) {
+  const r = G.rounds[ri];
+  if (r.winner === null) return;
+  const wi = r.winner;
+  if (!r.scores.every((s, i) => i === wi || s !== null)) return;
+  if (r.scores[wi] !== null) return;
+
+  const sum = r.scores.reduce((acc, s, i) => (i !== wi && s !== null ? acc + Math.abs(s) : acc), 0);
+  r.scores[wi] = sum;
+  G.players[wi].total += sum;
+  render();
+  showToast(sum > 0 ? `🏆 ${G.players[wi].name} 贏得 +${sum} 分！` : '本局結束');
+}
+
+// ── Render ─────────────────────────────────────────────────────────
+function render() {
+  const table = document.getElementById('score-table');
+  table.innerHTML = '';
+
+  const curRi = G.rounds.length - 1;
+  const cur = curRi >= 0 ? G.rounds[curRi] : null;
+  const picking = cur && cur.winner === null;
+  document.getElementById('pick-banner').classList.toggle('show', picking);
+
+  G.rounds.forEach((r, ri) => {
+    const isCur = ri === curRi;
+    const tr = document.createElement('tr');
+
+    // Round label
+    const lbl = document.createElement('td');
+    lbl.className = 'round-label'; lbl.textContent = `R${ri+1}`;
+    tr.appendChild(lbl);
+
+    // Score cells
+    G.players.forEach((p, pi) => {
+      const td = document.createElement('td');
+      td.className = 'score-cell';
+      const val = r.scores[pi];
+      const isWinner = r.winner === pi;
+
+      if (val !== null) {
+        const cls = val > 0 ? 'positive' : val < 0 ? 'negative' : 'zero';
+        const pfx = val > 0 ? '+' : '';
+        if (isWinner) {
+          td.classList.add('win-cell');
+          td.innerHTML = `<div class="cell-value ${cls}">${pfx}${val}</div><div class="cell-hint">贏家</div>`;
+        } else {
+          // Loser: double-tap to edit
+          td.classList.add('lose-cell');
+          td.innerHTML = `<div class="cell-value ${cls}">${pfx}${val}</div><div class="cell-hint">雙擊修改</div>`;
+          attachDoubleTap(td, ri, pi);
+        }
+      } else {
+        if (isCur && picking) {
+          td.classList.add('pick-mode');
+          td.innerHTML = `<div class="cell-value zero">贏?</div>`;
+          addTap(td, () => pickWinner(ri, pi));
+        } else if (isCur && !isWinner && r.winner !== null) {
+          td.classList.add('waiting');
+          td.innerHTML = `<div class="cell-value zero">—</div><div class="cell-hint">點擊輸入</div>`;
+          addTap(td, () => openNumpad(ri, pi, false));
+        } else if (isCur && isWinner) {
+          td.classList.add('win-pending');
+          td.innerHTML = `<div class="cell-value positive" style="font-size:13px;letter-spacing:0">待計算</div>`;
+        } else {
+          td.classList.add('waiting');
+          td.innerHTML = `<div class="cell-value zero">—</div>`;
+        }
+      }
+      tr.appendChild(td);
+    });
+
+    // Delete button cell
+    const delTd = document.createElement('td'); delTd.className = 'del-cell';
+    const delBtn = document.createElement('button'); delBtn.className = 'del-btn';
+    delBtn.innerHTML = `✕<div class="lp-bar-del"></div>`;
+    delBtn.title = '長按刪除此局';
+    attachDelLP(delBtn, ri);
+    delTd.appendChild(delBtn);
+    tr.appendChild(delTd);
+
+    table.appendChild(tr);
+  });
+
+  // Total row
+  const totTr = document.createElement('tr'); totTr.className = 'total-row';
+  const totLbl = document.createElement('td'); totLbl.className = 'total-label'; totLbl.textContent = '總分';
+  totTr.appendChild(totLbl);
+  G.players.forEach(p => {
+    const td = document.createElement('td'); td.className = 'total-cell';
+    const cls = p.total > 0 ? 'pos' : p.total < 0 ? 'neg' : 'zero';
+    const pfx = p.total > 0 ? '+' : '';
+    td.innerHTML = `<div class="total-value ${cls}">${pfx}${p.total}</div>`;
+    totTr.appendChild(td);
+  });
+  const spacer = document.createElement('td'); totTr.appendChild(spacer);
+  table.appendChild(totTr);
+}
+
+// ── Double-tap to edit loser cell ──────────────────────────────────
+// Works on both touch and mouse.
+// Touch: two taps within 350ms on the same cell → open numpad
+// Mouse: native dblclick event
+function attachDoubleTap(el, ri, pi) {
+  // Touch double-tap
+  el.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    const key = `${ri}-${pi}`;
+    const now = Date.now();
+    if (dtapMap[key] && now - dtapMap[key] < 350) {
+      // Double-tap!
+      delete dtapMap[key];
+      el.classList.add('dtap-flash');
+      setTimeout(() => el.classList.remove('dtap-flash'), 150);
+      if (navigator.vibrate) navigator.vibrate(15);
+      openNumpad(ri, pi, true);
+    } else {
+      dtapMap[key] = now;
+      // Clear after timeout so stale taps don't accumulate
+      setTimeout(() => { if (dtapMap[key]) delete dtapMap[key]; }, 400);
+    }
+  }, { passive: false });
+
+  // Mouse double-click (desktop fallback)
+  el.addEventListener('dblclick', (e) => {
+    openNumpad(ri, pi, true);
+  });
+}
+
+// ── Long-press delete button ───────────────────────────────────────
+function attachDelLP(el, ri) {
+  let startX, startY;
+
+  el.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.touches[0]; startX = t.clientX; startY = t.clientY;
+    delLpEl = el; el.classList.add('lp-del-active');
+    delLpTimer = setTimeout(() => {
+      delLpTimer = null; el.classList.remove('lp-del-active'); delLpEl = null;
+      if (navigator.vibrate) navigator.vibrate([10, 50, 20]);
+      deleteRound(ri);
+    }, LP_MS);
+  }, { passive: false });
+
+  el.addEventListener('touchend', e => { e.preventDefault(); clearDelLP(); }, { passive: false });
+  el.addEventListener('touchcancel', () => clearDelLP(), { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8) clearDelLP();
+  }, { passive: true });
+
+  // Mouse fallback (desktop)
+  el.addEventListener('click', () => deleteRound(ri));
+}
+
+function clearDelLP() {
+  clearTimeout(delLpTimer); delLpTimer = null;
+  if (delLpEl) { delLpEl.classList.remove('lp-del-active'); delLpEl = null; }
+}
+
+// ── addTap: touch + mouse single tap ──────────────────────────────
+function addTap(el, fn) {
+  let tapped = false;
+  el.addEventListener('touchstart', (e) => {
+    e.preventDefault(); tapped = true; fn();
+    setTimeout(() => tapped = false, 400);
+  }, { passive: false });
+  el.addEventListener('click', () => { if (!tapped) fn(); });
+}
+
+// ── Numpad ────────────────────────────────────────────────────────
+function openNumpad(ri, pi, isEdit) {
+  const existing = G.rounds[ri].scores[pi];
+  np = { ri, pi, isEdit, digits: (isEdit && existing !== null) ? String(Math.abs(existing)) : '' };
+  document.getElementById('np-who').textContent =
+    `${G.players[pi].name} — 第 ${ri+1} 局${isEdit ? '（修改）' : ''}`;
+  refreshDisp();
+  document.getElementById('numpad-overlay').classList.add('open');
+}
+function closeNumpad() { document.getElementById('numpad-overlay').classList.remove('open'); }
+
+function npInput(d) {
+  if (npGuard()) return;
+  if (np.digits.length >= 5) return;
+  np.digits += d; refreshDisp();
+}
+function npDel() {
+  if (npGuard()) return;
+  np.digits = np.digits.slice(0, -1); refreshDisp();
+}
+function refreshDisp() {
+  const el = document.getElementById('np-disp');
+  if (!np.digits) { el.textContent = '—'; el.className = 'np-disp empty'; return; }
+  el.textContent = '−' + np.digits; el.className = 'np-disp';
+}
+function confirmNumpad() {
+  if (npGuard()) return;
+  if (!np.digits) { closeNumpad(); return; }
+  const val = -parseInt(np.digits);
+  const { ri, pi, isEdit } = np;
+  const r = G.rounds[ri];
+  if (r.scores[pi] !== null) G.players[pi].total -= r.scores[pi];
+  r.scores[pi] = val;
+  G.players[pi].total += val;
+  if (isEdit && r.winner !== null && r.scores[r.winner] !== null) {
+    G.players[r.winner].total -= r.scores[r.winner];
+    r.scores[r.winner] = null;
+  }
+  closeNumpad();
+  tryAutoFill(ri);
+  render();
+}
+
+// ── Name edit ─────────────────────────────────────────────────────
+function openNameEdit(pi) {
+  nameEditIdx = pi;
+  document.getElementById('name-input').value = G.players[pi].name;
+  document.getElementById('name-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('name-input').focus(), 150);
+}
+function closeNameEdit() { document.getElementById('name-overlay').classList.remove('open'); }
+function confirmNameEdit() {
+  const v = document.getElementById('name-input').value.trim();
+  if (v) G.players[nameEditIdx].name = v;
+  closeNameEdit();
+  updateNameHeader(); // update header without full rebuild
+  render();
+}
+document.getElementById('name-input').addEventListener('keydown', e => { if (e.key === 'Enter') confirmNameEdit(); });
+
+// ── Backdrop close ────────────────────────────────────────────────
+['numpad-overlay','name-overlay','menu-overlay'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', e => {
+    if (e.target === el) { e.preventDefault();
+      if (id === 'numpad-overlay') closeNumpad();
+      else if (id === 'name-overlay') closeNameEdit();
+      else closeMenu();
+    }
+  }, { passive: false });
+  el.addEventListener('click', e => {
+    if (e.target === el) {
+      if (id === 'numpad-overlay') closeNumpad();
+      else if (id === 'name-overlay') closeNameEdit();
+      else closeMenu();
+    }
+  });
+});
+
+// ── Utils ─────────────────────────────────────────────────────────
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+let toastT;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
