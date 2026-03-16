@@ -3,7 +3,8 @@ name: Auto Update Sidebar List
 on:
   push:
     paths:
-      - 'apps/*.html'  # 監控 apps 資料夾下的變動
+      - 'apps/**'
+  workflow_dispatch: # 讓你可以手動點擊按鈕執行
 
 jobs:
   build:
@@ -14,20 +15,26 @@ jobs:
 
       - name: Generate Metadata Filelist
         run: |
+          echo "Scanning apps folder..."
           echo "[" > filelist.json
-          first=true
-          # 掃描 apps 資料夾
+          FIRST=true
+          # 遍歷 apps 資料夾下的所有 html
           for f in apps/*.html; do
-            if [ -f "$f" ]; then
-              title=$(grep -oP '(?<=<title>).*?(?=</title>)' "$f" || echo "$f")
-              if [ "$first" = true ]; then first=false; else echo "," >> filelist.json; fi
-              # 將路徑存入 JSON
-              echo "{\"path\": \"$f\", \"title\": \"$title\"}" >> filelist.json
+            if [ -e "$f" ]; then
+              # 嘗試抓取標題，抓不到就用檔案名稱代替
+              TITLE=$(grep -oP '(?<=<title>).*?(?=</title>)' "$f" | head -1 || echo "")
+              if [ -z "$TITLE" ]; then
+                TITLE=$(basename "$f")
+              fi
+              
+              if [ "$FIRST" = true ]; then FIRST=false; else echo "," >> filelist.json; fi
+              echo "{\"path\": \"$f\", \"title\": \"$TITLE\"}" >> filelist.json
             fi
           done
           echo "]" >> filelist.json
+          cat filelist.json # 在 Log 裡印出來檢查
 
-      - name: Commit and push if changed
+      - name: Commit and push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
