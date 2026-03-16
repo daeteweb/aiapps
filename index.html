@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 小程式收藏盒</title>
+    <style>
+        :root { --sidebar-width: 260px; }
+        body { display: flex; margin: 0; height: 100vh; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: #fff; }
+        
+        /* 側邊欄樣式 */
+        #sidebar { 
+            width: var(--sidebar-width); 
+            background: #f8f9fa; 
+            border-right: 1px solid #dee2e6; 
+            overflow-y: auto; 
+            display: flex; 
+            flex-direction: column;
+        }
+        .sidebar-header { padding: 20px; border-bottom: 2px solid #eee; font-weight: bold; font-size: 1.2rem; color: #333; }
+        #menu { padding: 10px 0; }
+        .nav-item { 
+            display: block; 
+            padding: 12px 20px; 
+            color: #495057; 
+            text-decoration: none; 
+            transition: 0.2s;
+            border-left: 4px solid transparent;
+        }
+        .nav-item:hover { background: #e9ecef; color: #007bff; border-left: 4px solid #007bff; }
+        
+        /* 右側主視窗 */
+        #main { flex: 1; border: none; background: #fff; }
+
+        /* 手機版適應 (螢幕寬度小於 768px) */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #sidebar { width: 100%; height: 100vh; border-right: none; }
+            #main { display: none; } /* 手機版不使用 iframe，直接開新分頁 */
+            .sidebar-header { text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div class="sidebar-header">我的 AI 程式集</div>
+    <div id="menu">讀取中...</div>
+</div>
+
+<iframe id="main" name="main-frame" src="about:blank"></iframe>
+
+<script>
+    // 偵測裝置類型
+    const isMobile = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768);
+
+async function loadMenu() {
+    const menu = document.getElementById('menu');
+    try {
+        const response = await fetch('filelist.json');
+        const data = await response.json();
+        const mobileMode = isMobile();
+        
+        menu.innerHTML = '';
+        data.forEach(item => {
+            const a = document.createElement('a');
+            // item.path 現在會是 "apps/your-app.html"
+            a.href = item.path; 
+            a.textContent = item.title;
+            a.className = 'nav-item';
+            
+            if (mobileMode) {
+                a.target = '_blank';
+            } else {
+                a.target = 'main-frame';
+            }
+            menu.appendChild(a);
+        });
+
+        if (!mobileMode && data.length > 0) {
+            document.getElementById('main').src = data[0].path;
+        }
+    } catch (err) {
+        menu.innerHTML = '<div style="padding:20px; color:red;">請確認 apps/ 資料夾內是否有 HTML 檔案。</div>';
+    }
+}
+loadMenu();
+</script>
+
+</body>
+</html>
