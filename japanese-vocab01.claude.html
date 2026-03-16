@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日文單詞記憶卡</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;700&family=Noto+Sans+TC:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f0e0c;
+  --surface: #1a1915;
+  --surface2: #232218;
+  --border: #2e2c24;
+  --gold: #c9a84c;
+  --gold-dim: #7a6330;
+  --text: #e8e2d4;
+  --text-muted: #6b6455;
+  --text-dim: #9a9080;
+  --green: #4a9e6a;
+  --green-bg: #0d2018;
+  --red: #c0503a;
+  --red-bg: #200e0a;
+  --blue: #4a80c0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans TC', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 16px 48px;
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(201,168,76,0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 100%, rgba(74,128,192,0.03) 0%, transparent 55%);
+}
+.header {
+  width: 100%; max-width: 480px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0 18px;
+}
+.logo {
+  font-family: 'Noto Serif JP', serif;
+  font-weight: 300; font-size: 1rem;
+  color: var(--gold); letter-spacing: 0.3em;
+}
+.icon-btn {
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-dim); padding: 7px 12px; border-radius: 4px;
+  font-size: 0.72rem; cursor: pointer; letter-spacing: 0.05em;
+  font-family: 'Noto Sans TC', sans-serif; transition: all 0.15s;
+}
+.icon-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+
+/* Pool Status */
+.pool-status {
+  width: 100%; max-width: 480px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px; margin-bottom: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pool-row { display: flex; justify-content: space-between; align-items: center; }
+.pool-label { font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.08em; }
+.pool-numbers { display: flex; gap: 18px; }
+.pool-stat { text-align: center; font-size: 0.68rem; color: var(--text-muted); letter-spacing: 0.05em; line-height: 1.6; }
+.pool-stat strong { display: block; font-size: 1.15rem; font-weight: 500; font-family: 'DM Serif Display', serif; }
+.pool-stat.s-pool strong { color: var(--gold); }
+.pool-stat.s-learned strong { color: var(--green); }
+.pool-stat.s-remain strong { color: var(--text-dim); }
+.pool-bar-track { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; display: flex; }
+.pool-bar-learned { background: var(--green); height: 100%; transition: width 0.4s ease; }
+.pool-bar-again { background: var(--red); height: 100%; transition: width 0.4s ease; }
+.pool-bar-fresh { background: var(--gold-dim); height: 100%; transition: width 0.4s ease; }
+.pool-list-toggle {
+  font-size: 0.68rem; color: var(--text-muted); letter-spacing: 0.08em;
+  cursor: pointer; text-align: center; padding: 4px 0; transition: color 0.15s;
+}
+.pool-list-toggle:hover { color: var(--gold); }
+.pool-list { display: none; flex-wrap: wrap; gap: 5px; max-height: 130px; overflow-y: auto; }
+.pool-list.open { display: flex; }
+.pool-word-chip {
+  font-family: 'Noto Serif JP', serif; font-size: 0.8rem;
+  padding: 3px 9px; border-radius: 3px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text-dim);
+}
+.pool-word-chip.again { border-color: rgba(192,80,58,0.4); color: var(--red); }
+
+/* Filter tabs */
+.filter-tabs {
+  width: 100%; max-width: 480px;
+  display: flex; gap: 6px; margin-bottom: 18px;
+}
+.tab {
+  flex: 1; padding: 9px 4px; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-muted); font-family: 'Noto Sans TC', sans-serif;
+  font-size: 0.73rem; border-radius: 4px; cursor: pointer;
+  letter-spacing: 0.03em; transition: all 0.15s; text-align: center;
+}
+.tab.active { background: var(--surface2); border-color: var(--gold-dim); color: var(--gold); }
+
+/* Card */
+.card-area { width: 100%; max-width: 480px; perspective: 1200px; margin-bottom: 18px; }
+.card-wrapper {
+  position: relative; width: 100%; height: 265px;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.23, 1, 0.32, 1);
+  cursor: pointer;
+}
+.card-wrapper.flipped { transform: rotateY(180deg); }
+.card-face {
+  position: absolute; inset: 0;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  border-radius: 12px; border: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px; padding: 28px 24px;
+}
+.card-front {
+  background: var(--surface);
+  background-image: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.07), transparent 65%);
+}
+.card-back {
+  background: var(--surface2); transform: rotateY(180deg);
+  background-image: radial-gradient(ellipse at 50% 100%, rgba(74,128,192,0.07), transparent 65%);
+}
+.card-corner { position: absolute; top: 13px; right: 15px; font-size: 0.63rem; color: var(--text-muted); letter-spacing: 0.05em; }
+.card-category { font-size: 0.63rem; letter-spacing: 0.2em; color: var(--gold-dim); font-family: 'Noto Sans TC', sans-serif; }
+.card-jp { font-family: 'Noto Serif JP', serif; font-size: clamp(44px, 13vw, 68px); font-weight: 300; color: var(--text); line-height: 1; text-align: center; }
+.card-flip-hint { font-size: 0.62rem; color: var(--text-muted); letter-spacing: 0.15em; position: absolute; bottom: 13px; }
+.card-reading { font-family: 'Noto Serif JP', serif; font-size: 1.35rem; color: var(--gold); letter-spacing: 0.1em; }
+.card-meaning { font-size: 1.55rem; font-weight: 500; color: var(--text); letter-spacing: 0.05em; font-family: 'DM Serif Display', serif; }
+.card-romaji { font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.1em; }
+.status-dot { position: absolute; top: 13px; left: 15px; width: 7px; height: 7px; border-radius: 50%; background: transparent; border: 1.5px solid var(--border); transition: all 0.3s; }
+.status-dot.again { background: var(--red); border-color: var(--red); }
+.new-badge { position: absolute; top: 13px; left: 24px; font-size: 0.58rem; letter-spacing: 0.12em; color: var(--blue); border: 1px solid var(--blue); border-radius: 3px; padding: 2px 5px; opacity: 0; transition: opacity 0.3s; }
+.new-badge.show { opacity: 1; }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(28px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.card-area.animate { animation: slideIn 0.32s cubic-bezier(0.23,1,0.32,1); }
+
+/* Actions */
+.actions { width: 100%; max-width: 480px; display: flex; gap: 10px; margin-bottom: 18px; }
+.action-btn {
+  flex: 1; padding: 15px; border-radius: 6px; border: 1px solid;
+  font-family: 'Noto Sans TC', sans-serif; font-size: 0.82rem; cursor: pointer;
+  letter-spacing: 0.05em; transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.btn-learned { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+.btn-learned:hover { background: var(--green); color: #fff; }
+.btn-again { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+.btn-again:hover { background: var(--red); color: #fff; }
+.btn-skip { background: var(--surface); border-color: var(--border); color: var(--text-muted); flex: 0.55; }
+.btn-skip:hover { border-color: var(--text-dim); color: var(--text); }
+
+.session-info { width: 100%; max-width: 480px; display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-muted); letter-spacing: 0.05em; padding: 0 2px; }
+.session-info span { color: var(--text-dim); }
+
+/* Empty state */
+.empty-state { width: 100%; max-width: 480px; text-align: center; padding: 60px 24px; border: 1px dashed var(--border); border-radius: 12px; display: none; }
+.empty-state .big { font-family: 'Noto Serif JP', serif; font-size: 3rem; color: var(--gold); margin-bottom: 16px; }
+.empty-state p { color: var(--text-muted); font-size: 0.85rem; line-height: 1.8; }
+.empty-refill { margin-top: 20px; padding: 12px 24px; background: transparent; border: 1px solid var(--gold-dim); color: var(--gold); border-radius: 6px; font-family: 'Noto Sans TC', sans-serif; font-size: 0.82rem; cursor: pointer; transition: all 0.15s; }
+.empty-refill:hover { background: var(--gold); color: var(--bg); }
+
+/* Modal */
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 24px; width: 100%; max-width: 420px; max-height: 82vh; overflow-y: auto; }
+.modal h2 { font-family: 'Noto Serif JP', serif; font-size: 1rem; color: var(--gold); margin-bottom: 18px; letter-spacing: 0.1em; }
+.modal-section { margin-bottom: 16px; }
+.modal-section-label { font-size: 0.68rem; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 8px; }
+.modal-row { display: flex; gap: 10px; }
+.modal-btn { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--text-dim); font-family: 'Noto Sans TC', sans-serif; font-size: 0.78rem; cursor: pointer; transition: all 0.15s; }
+.modal-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+.modal-btn.danger { border-color: var(--red); color: var(--red); background: var(--red-bg); }
+.modal-btn.danger:hover { background: var(--red); color: #fff; }
+.modal-stats { font-size: 0.78rem; color: var(--text-muted); line-height: 2.1; letter-spacing: 0.03em; border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; background: var(--bg); margin-top: 4px; }
+.modal-stats span { color: var(--text-dim); }
+.modal-close { width: 100%; padding: 12px; margin-top: 14px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-family: 'Noto Sans TC', sans-serif; font-size: 0.8rem; cursor: pointer; }
+.slider-row { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.slider-row input[type=range] { flex: 1; accent-color: var(--gold); }
+.slider-val { font-size: 0.85rem; color: var(--gold); min-width: 28px; text-align: right; font-family: 'DM Serif Display', serif; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">単語帳</div>
+  <button class="icon-btn" onclick="openModal()">⚙ 選項</button>
+</div>
+
+<div class="pool-status">
+  <div class="pool-row">
+    <div class="pool-label">學習池</div>
+    <div class="pool-numbers">
+      <div class="pool-stat s-pool"><strong id="stat-pool">0</strong>池中</div>
+      <div class="pool-stat s-learned"><strong id="stat-learned">0</strong>已學會</div>
+      <div class="pool-stat s-remain"><strong id="stat-total">200</strong>總單詞</div>
+    </div>
+  </div>
+  <div class="pool-bar-track">
+    <div class="pool-bar-learned" id="bar-learned" style="width:0%"></div>
+    <div class="pool-bar-again" id="bar-again" style="width:0%"></div>
+    <div class="pool-bar-fresh" id="bar-fresh" style="width:0%"></div>
+  </div>
+  <div class="pool-list-toggle" onclick="togglePoolList()">▾ 查看池中單詞</div>
+  <div class="pool-list" id="pool-list"></div>
+</div>
+
+<div class="filter-tabs">
+  <div class="tab active" onclick="setFilter('pool')" id="tab-pool">學習池</div>
+  <div class="tab" onclick="setFilter('learned')" id="tab-learned">已學會</div>
+  <div class="tab" onclick="setFilter('all')" id="tab-all">全部</div>
+</div>
+
+<div class="card-area" id="card-area">
+  <div class="card-wrapper" id="card-wrapper" onclick="flipCard()">
+    <div class="card-face card-front">
+      <div class="status-dot" id="status-dot"></div>
+      <div class="new-badge" id="new-badge">NEW</div>
+      <div class="card-corner" id="card-corner">—</div>
+      <div class="card-category" id="card-category">—</div>
+      <div class="card-jp" id="card-jp">—</div>
+      <div class="card-flip-hint">點擊翻面</div>
+    </div>
+    <div class="card-face card-back">
+      <div class="card-corner" id="card-corner-back">—</div>
+      <div class="card-reading" id="card-reading">—</div>
+      <div class="card-meaning" id="card-meaning">—</div>
+      <div class="card-romaji" id="card-romaji">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="empty-state" id="empty-state">
+  <div class="big" id="empty-icon">✨</div>
+  <p id="empty-msg">這輪看完了！</p>
+  <button class="empty-refill" id="empty-btn" onclick="handleEmptyBtn()">再來一輪</button>
+</div>
+
+<div class="actions" id="actions">
+  <button class="action-btn btn-again" onclick="markAgain()">✗ 還沒會</button>
+  <button class="action-btn btn-skip" onclick="nextCard()">跳過</button>
+  <button class="action-btn btn-learned" onclick="markLearned()">✓ 學會了</button>
+</div>
+
+<div class="session-info">
+  <div>本輪剩餘 <span id="remain-count">—</span></div>
+  <div>本次學會 <span id="session-learned">0</span></div>
+</div>
+
+<div class="modal-bg" id="modal-bg" onclick="closeModalBg(event)">
+  <div class="modal">
+    <h2>⚙ 設定與進度</h2>
+    <div class="modal-section">
+      <div class="modal-section-label">學習池大小（目前 <span id="pool-size-cur">20</span> 個）</div>
+      <div class="slider-row">
+        <input type="range" id="pool-size-slider" min="5" max="50" value="20" oninput="updatePoolSizeDisplay(this.value)">
+        <div class="slider-val" id="pool-size-display">20</div>
+      </div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-label">進度備份</div>
+      <div class="modal-row">
+        <button class="modal-btn" onclick="exportProgress()">📤 匯出 JSON</button>
+        <button class="modal-btn" onclick="document.getElementById('import-file').click()">📥 匯入 JSON</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importProgress(event)">
+      </div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-label">重置</div>
+      <div class="modal-row">
+        <button class="modal-btn danger" onclick="resetProgress()">🗑 重置所有進度</button>
+      </div>
+    </div>
+    <div class="modal-stats" id="modal-stats"></div>
+    <button class="modal-close" onclick="closeModal()">套用並關閉</button>
+  </div>
+</div>
+
+<script>
+const WORDS = [
+  {id:1,jp:'こんにちは',read:'こんにちは',rom:'konnichiwa',zh:'你好',cat:'招呼'},
+  {id:2,jp:'ありがとう',read:'ありがとう',rom:'arigatou',zh:'謝謝',cat:'招呼'},
+  {id:3,jp:'すみません',read:'すみません',rom:'sumimasen',zh:'不好意思／對不起',cat:'招呼'},
+  {id:4,jp:'はい',read:'はい',rom:'hai',zh:'是',cat:'招呼'},
+  {id:5,jp:'いいえ',read:'いいえ',rom:'iie',zh:'不是',cat:'招呼'},
+  {id:6,jp:'おはよう',read:'おはよう',rom:'ohayou',zh:'早安',cat:'招呼'},
+  {id:7,jp:'おやすみ',read:'おやすみ',rom:'oyasumi',zh:'晚安',cat:'招呼'},
+  {id:8,jp:'さようなら',read:'さようなら',rom:'sayounara',zh:'再見',cat:'招呼'},
+  {id:9,jp:'どうぞ',read:'どうぞ',rom:'douzo',zh:'請／這邊請',cat:'招呼'},
+  {id:10,jp:'どうも',read:'どうも',rom:'doumo',zh:'謝謝／你好',cat:'招呼'},
+  {id:11,jp:'一',read:'いち',rom:'ichi',zh:'一',cat:'數字'},
+  {id:12,jp:'二',read:'に',rom:'ni',zh:'二',cat:'數字'},
+  {id:13,jp:'三',read:'さん',rom:'san',zh:'三',cat:'數字'},
+  {id:14,jp:'四',read:'し／よん',rom:'shi/yon',zh:'四',cat:'數字'},
+  {id:15,jp:'五',read:'ご',rom:'go',zh:'五',cat:'數字'},
+  {id:16,jp:'六',read:'ろく',rom:'roku',zh:'六',cat:'數字'},
+  {id:17,jp:'七',read:'しち／なな',rom:'shichi/nana',zh:'七',cat:'數字'},
+  {id:18,jp:'八',read:'はち',rom:'hachi',zh:'八',cat:'數字'},
+  {id:19,jp:'九',read:'く／きゅう',rom:'ku/kyuu',zh:'九',cat:'數字'},
+  {id:20,jp:'十',read:'じゅう',rom:'juu',zh:'十',cat:'數字'},
+  {id:21,jp:'百',read:'ひゃく',rom:'hyaku',zh:'百',cat:'數字'},
+  {id:22,jp:'千',read:'せん',rom:'sen',zh:'千',cat:'數字'},
+  {id:23,jp:'万',read:'まん',rom:'man',zh:'萬',cat:'數字'},
+  {id:24,jp:'今日',read:'きょう',rom:'kyou',zh:'今天',cat:'時間'},
+  {id:25,jp:'明日',read:'あした',rom:'ashita',zh:'明天',cat:'時間'},
+  {id:26,jp:'昨日',read:'きのう',rom:'kinou',zh:'昨天',cat:'時間'},
+  {id:27,jp:'今',read:'いま',rom:'ima',zh:'現在',cat:'時間'},
+  {id:28,jp:'朝',read:'あさ',rom:'asa',zh:'早上',cat:'時間'},
+  {id:29,jp:'昼',read:'ひる',rom:'hiru',zh:'中午',cat:'時間'},
+  {id:30,jp:'夜',read:'よる',rom:'yoru',zh:'晚上',cat:'時間'},
+  {id:31,jp:'年',read:'とし',rom:'toshi',zh:'年',cat:'時間'},
+  {id:32,jp:'月',read:'つき',rom:'tsuki',zh:'月',cat:'時間'},
+  {id:33,jp:'週',read:'しゅう',rom:'shuu',zh:'週',cat:'時間'},
+  {id:34,jp:'時間',read:'じかん',rom:'jikan',zh:'時間',cat:'時間'},
+  {id:35,jp:'分',read:'ふん',rom:'fun',zh:'分鐘',cat:'時間'},
+  {id:36,jp:'私',read:'わたし',rom:'watashi',zh:'我',cat:'人稱'},
+  {id:37,jp:'あなた',read:'あなた',rom:'anata',zh:'你',cat:'人稱'},
+  {id:38,jp:'彼',read:'かれ',rom:'kare',zh:'他',cat:'人稱'},
+  {id:39,jp:'彼女',read:'かのじょ',rom:'kanojo',zh:'她',cat:'人稱'},
+  {id:40,jp:'私たち',read:'わたしたち',rom:'watashitachi',zh:'我們',cat:'人稱'},
+  {id:41,jp:'人',read:'ひと',rom:'hito',zh:'人',cat:'人稱'},
+  {id:42,jp:'友達',read:'ともだち',rom:'tomodachi',zh:'朋友',cat:'人稱'},
+  {id:43,jp:'家族',read:'かぞく',rom:'kazoku',zh:'家族',cat:'人稱'},
+  {id:44,jp:'先生',read:'せんせい',rom:'sensei',zh:'老師',cat:'人稱'},
+  {id:45,jp:'学生',read:'がくせい',rom:'gakusei',zh:'學生',cat:'人稱'},
+  {id:46,jp:'食べる',read:'たべる',rom:'taberu',zh:'吃',cat:'動詞'},
+  {id:47,jp:'飲む',read:'のむ',rom:'nomu',zh:'喝',cat:'動詞'},
+  {id:48,jp:'行く',read:'いく',rom:'iku',zh:'去',cat:'動詞'},
+  {id:49,jp:'来る',read:'くる',rom:'kuru',zh:'來',cat:'動詞'},
+  {id:50,jp:'見る',read:'みる',rom:'miru',zh:'看',cat:'動詞'},
+  {id:51,jp:'聞く',read:'きく',rom:'kiku',zh:'聽／問',cat:'動詞'},
+  {id:52,jp:'話す',read:'はなす',rom:'hanasu',zh:'說話',cat:'動詞'},
+  {id:53,jp:'読む',read:'よむ',rom:'yomu',zh:'讀',cat:'動詞'},
+  {id:54,jp:'書く',read:'かく',rom:'kaku',zh:'寫',cat:'動詞'},
+  {id:55,jp:'買う',read:'かう',rom:'kau',zh:'買',cat:'動詞'},
+  {id:56,jp:'売る',read:'うる',rom:'uru',zh:'賣',cat:'動詞'},
+  {id:57,jp:'使う',read:'つかう',rom:'tsukau',zh:'使用',cat:'動詞'},
+  {id:58,jp:'作る',read:'つくる',rom:'tsukuru',zh:'製作',cat:'動詞'},
+  {id:59,jp:'寝る',read:'ねる',rom:'neru',zh:'睡覺',cat:'動詞'},
+  {id:60,jp:'起きる',read:'おきる',rom:'okiru',zh:'起床',cat:'動詞'},
+  {id:61,jp:'働く',read:'はたらく',rom:'hataraku',zh:'工作',cat:'動詞'},
+  {id:62,jp:'勉強する',read:'べんきょうする',rom:'benkyousuru',zh:'讀書',cat:'動詞'},
+  {id:63,jp:'帰る',read:'かえる',rom:'kaeru',zh:'回去',cat:'動詞'},
+  {id:64,jp:'出る',read:'でる',rom:'deru',zh:'出去',cat:'動詞'},
+  {id:65,jp:'入る',read:'はいる',rom:'hairu',zh:'進入',cat:'動詞'},
+  {id:66,jp:'待つ',read:'まつ',rom:'matsu',zh:'等待',cat:'動詞'},
+  {id:67,jp:'知る',read:'しる',rom:'shiru',zh:'知道',cat:'動詞'},
+  {id:68,jp:'思う',read:'おもう',rom:'omou',zh:'認為／想',cat:'動詞'},
+  {id:69,jp:'分かる',read:'わかる',rom:'wakaru',zh:'明白',cat:'動詞'},
+  {id:70,jp:'できる',read:'できる',rom:'dekiru',zh:'能夠／做到',cat:'動詞'},
+  {id:71,jp:'大きい',read:'おおきい',rom:'ookii',zh:'大的',cat:'形容詞'},
+  {id:72,jp:'小さい',read:'ちいさい',rom:'chiisai',zh:'小的',cat:'形容詞'},
+  {id:73,jp:'多い',read:'おおい',rom:'ooi',zh:'多的',cat:'形容詞'},
+  {id:74,jp:'少ない',read:'すくない',rom:'sukunai',zh:'少的',cat:'形容詞'},
+  {id:75,jp:'高い',read:'たかい',rom:'takai',zh:'高的／貴的',cat:'形容詞'},
+  {id:76,jp:'安い',read:'やすい',rom:'yasui',zh:'便宜的',cat:'形容詞'},
+  {id:77,jp:'新しい',read:'あたらしい',rom:'atarashii',zh:'新的',cat:'形容詞'},
+  {id:78,jp:'古い',read:'ふるい',rom:'furui',zh:'舊的',cat:'形容詞'},
+  {id:79,jp:'良い',read:'いい',rom:'ii',zh:'好的',cat:'形容詞'},
+  {id:80,jp:'悪い',read:'わるい',rom:'warui',zh:'壞的',cat:'形容詞'},
+  {id:81,jp:'難しい',read:'むずかしい',rom:'muzukashii',zh:'困難的',cat:'形容詞'},
+  {id:82,jp:'易しい',read:'やさしい',rom:'yasashii',zh:'容易的',cat:'形容詞'},
+  {id:83,jp:'面白い',read:'おもしろい',rom:'omoshiroi',zh:'有趣的',cat:'形容詞'},
+  {id:84,jp:'楽しい',read:'たのしい',rom:'tanoshii',zh:'快樂的',cat:'形容詞'},
+  {id:85,jp:'嬉しい',read:'うれしい',rom:'ureshii',zh:'高興的',cat:'形容詞'},
+  {id:86,jp:'悲しい',read:'かなしい',rom:'kanashii',zh:'悲傷的',cat:'形容詞'},
+  {id:87,jp:'忙しい',read:'いそがしい',rom:'isogashii',zh:'忙的',cat:'形容詞'},
+  {id:88,jp:'暑い',read:'あつい',rom:'atsui',zh:'熱的',cat:'形容詞'},
+  {id:89,jp:'寒い',read:'さむい',rom:'samui',zh:'冷的',cat:'形容詞'},
+  {id:90,jp:'美しい',read:'うつくしい',rom:'utsukushii',zh:'美麗的',cat:'形容詞'},
+  {id:91,jp:'学校',read:'がっこう',rom:'gakkou',zh:'學校',cat:'場所'},
+  {id:92,jp:'会社',read:'かいしゃ',rom:'kaisha',zh:'公司',cat:'場所'},
+  {id:93,jp:'家',read:'いえ',rom:'ie',zh:'家',cat:'場所'},
+  {id:94,jp:'駅',read:'えき',rom:'eki',zh:'車站',cat:'場所'},
+  {id:95,jp:'病院',read:'びょういん',rom:'byouin',zh:'醫院',cat:'場所'},
+  {id:96,jp:'銀行',read:'ぎんこう',rom:'ginkou',zh:'銀行',cat:'場所'},
+  {id:97,jp:'郵便局',read:'ゆうびんきょく',rom:'yuubinkyoku',zh:'郵局',cat:'場所'},
+  {id:98,jp:'図書館',read:'としょかん',rom:'toshokan',zh:'圖書館',cat:'場所'},
+  {id:99,jp:'公園',read:'こうえん',rom:'kouen',zh:'公園',cat:'場所'},
+  {id:100,jp:'レストラン',read:'レストラン',rom:'resutoran',zh:'餐廳',cat:'場所'},
+  {id:101,jp:'スーパー',read:'スーパー',rom:'suupaa',zh:'超市',cat:'場所'},
+  {id:102,jp:'空港',read:'くうこう',rom:'kuukou',zh:'機場',cat:'場所'},
+  {id:103,jp:'ホテル',read:'ホテル',rom:'hoteru',zh:'飯店',cat:'場所'},
+  {id:104,jp:'ご飯',read:'ごはん',rom:'gohan',zh:'飯',cat:'食物'},
+  {id:105,jp:'パン',read:'パン',rom:'pan',zh:'麵包',cat:'食物'},
+  {id:106,jp:'肉',read:'にく',rom:'niku',zh:'肉',cat:'食物'},
+  {id:107,jp:'魚',read:'さかな',rom:'sakana',zh:'魚',cat:'食物'},
+  {id:108,jp:'野菜',read:'やさい',rom:'yasai',zh:'蔬菜',cat:'食物'},
+  {id:109,jp:'果物',read:'くだもの',rom:'kudamono',zh:'水果',cat:'食物'},
+  {id:110,jp:'水',read:'みず',rom:'mizu',zh:'水',cat:'食物'},
+  {id:111,jp:'お茶',read:'おちゃ',rom:'ocha',zh:'茶',cat:'食物'},
+  {id:112,jp:'コーヒー',read:'コーヒー',rom:'koohii',zh:'咖啡',cat:'食物'},
+  {id:113,jp:'ビール',read:'ビール',rom:'biiru',zh:'啤酒',cat:'食物'},
+  {id:114,jp:'牛乳',read:'ぎゅうにゅう',rom:'gyuunyuu',zh:'牛奶',cat:'食物'},
+  {id:115,jp:'卵',read:'たまご',rom:'tamago',zh:'雞蛋',cat:'食物'},
+  {id:116,jp:'寿司',read:'すし',rom:'sushi',zh:'壽司',cat:'食物'},
+  {id:117,jp:'ラーメン',read:'ラーメン',rom:'raamen',zh:'拉麵',cat:'食物'},
+  {id:118,jp:'電車',read:'でんしゃ',rom:'densha',zh:'電車',cat:'交通'},
+  {id:119,jp:'バス',read:'バス',rom:'basu',zh:'公車',cat:'交通'},
+  {id:120,jp:'タクシー',read:'タクシー',rom:'takushii',zh:'計程車',cat:'交通'},
+  {id:121,jp:'飛行機',read:'ひこうき',rom:'hikouki',zh:'飛機',cat:'交通'},
+  {id:122,jp:'自転車',read:'じてんしゃ',rom:'jitensha',zh:'腳踏車',cat:'交通'},
+  {id:123,jp:'車',read:'くるま',rom:'kuruma',zh:'汽車',cat:'交通'},
+  {id:124,jp:'船',read:'ふね',rom:'fune',zh:'船',cat:'交通'},
+  {id:125,jp:'地図',read:'ちず',rom:'chizu',zh:'地圖',cat:'交通'},
+  {id:126,jp:'切符',read:'きっぷ',rom:'kippu',zh:'票',cat:'交通'},
+  {id:127,jp:'目',read:'め',rom:'me',zh:'眼睛',cat:'身體'},
+  {id:128,jp:'耳',read:'みみ',rom:'mimi',zh:'耳朵',cat:'身體'},
+  {id:129,jp:'口',read:'くち',rom:'kuchi',zh:'嘴',cat:'身體'},
+  {id:130,jp:'鼻',read:'はな',rom:'hana',zh:'鼻子',cat:'身體'},
+  {id:131,jp:'手',read:'て',rom:'te',zh:'手',cat:'身體'},
+  {id:132,jp:'足',read:'あし',rom:'ashi',zh:'腳',cat:'身體'},
+  {id:133,jp:'頭',read:'あたま',rom:'atama',zh:'頭',cat:'身體'},
+  {id:134,jp:'顔',read:'かお',rom:'kao',zh:'臉',cat:'身體'},
+  {id:135,jp:'体',read:'からだ',rom:'karada',zh:'身體',cat:'身體'},
+  {id:136,jp:'心',read:'こころ',rom:'kokoro',zh:'心',cat:'身體'},
+  {id:137,jp:'天気',read:'てんき',rom:'tenki',zh:'天氣',cat:'天氣'},
+  {id:138,jp:'晴れ',read:'はれ',rom:'hare',zh:'晴天',cat:'天氣'},
+  {id:139,jp:'雨',read:'あめ',rom:'ame',zh:'雨',cat:'天氣'},
+  {id:140,jp:'雪',read:'ゆき',rom:'yuki',zh:'雪',cat:'天氣'},
+  {id:141,jp:'風',read:'かぜ',rom:'kaze',zh:'風',cat:'天氣'},
+  {id:142,jp:'曇り',read:'くもり',rom:'kumori',zh:'陰天',cat:'天氣'},
+  {id:143,jp:'暖かい',read:'あたたかい',rom:'atatakai',zh:'溫暖的',cat:'天氣'},
+  {id:144,jp:'涼しい',read:'すずしい',rom:'suzushii',zh:'涼爽的',cat:'天氣'},
+  {id:145,jp:'赤',read:'あか',rom:'aka',zh:'紅色',cat:'顏色'},
+  {id:146,jp:'青',read:'あお',rom:'ao',zh:'藍色',cat:'顏色'},
+  {id:147,jp:'白',read:'しろ',rom:'shiro',zh:'白色',cat:'顏色'},
+  {id:148,jp:'黒',read:'くろ',rom:'kuro',zh:'黑色',cat:'顏色'},
+  {id:149,jp:'黄色',read:'きいろ',rom:'kiiro',zh:'黃色',cat:'顏色'},
+  {id:150,jp:'緑',read:'みどり',rom:'midori',zh:'綠色',cat:'顏色'},
+  {id:151,jp:'紫',read:'むらさき',rom:'murasaki',zh:'紫色',cat:'顏色'},
+  {id:152,jp:'茶色',read:'ちゃいろ',rom:'chairo',zh:'咖啡色',cat:'顏色'},
+  {id:153,jp:'上',read:'うえ',rom:'ue',zh:'上面',cat:'方位'},
+  {id:154,jp:'下',read:'した',rom:'shita',zh:'下面',cat:'方位'},
+  {id:155,jp:'右',read:'みぎ',rom:'migi',zh:'右邊',cat:'方位'},
+  {id:156,jp:'左',read:'ひだり',rom:'hidari',zh:'左邊',cat:'方位'},
+  {id:157,jp:'前',read:'まえ',rom:'mae',zh:'前面',cat:'方位'},
+  {id:158,jp:'後ろ',read:'うしろ',rom:'ushiro',zh:'後面',cat:'方位'},
+  {id:159,jp:'中',read:'なか',rom:'naka',zh:'裡面',cat:'方位'},
+  {id:160,jp:'外',read:'そと',rom:'soto',zh:'外面',cat:'方位'},
+  {id:161,jp:'近く',read:'ちかく',rom:'chikaku',zh:'附近',cat:'方位'},
+  {id:162,jp:'遠い',read:'とおい',rom:'tooi',zh:'遠的',cat:'方位'},
+  {id:163,jp:'本',read:'ほん',rom:'hon',zh:'書',cat:'物品'},
+  {id:164,jp:'鞄',read:'かばん',rom:'kaban',zh:'包包',cat:'物品'},
+  {id:165,jp:'財布',read:'さいふ',rom:'saifu',zh:'錢包',cat:'物品'},
+  {id:166,jp:'鍵',read:'かぎ',rom:'kagi',zh:'鑰匙',cat:'物品'},
+  {id:167,jp:'携帯',read:'けいたい',rom:'keitai',zh:'手機',cat:'物品'},
+  {id:168,jp:'パソコン',read:'パソコン',rom:'pasokon',zh:'電腦',cat:'物品'},
+  {id:169,jp:'時計',read:'とけい',rom:'tokei',zh:'時鐘／手錶',cat:'物品'},
+  {id:170,jp:'眼鏡',read:'めがね',rom:'megane',zh:'眼鏡',cat:'物品'},
+  {id:171,jp:'傘',read:'かさ',rom:'kasa',zh:'雨傘',cat:'物品'},
+  {id:172,jp:'服',read:'ふく',rom:'fuku',zh:'衣服',cat:'物品'},
+  {id:173,jp:'靴',read:'くつ',rom:'kutsu',zh:'鞋子',cat:'物品'},
+  {id:174,jp:'帽子',read:'ぼうし',rom:'boushi',zh:'帽子',cat:'物品'},
+  {id:175,jp:'椅子',read:'いす',rom:'isu',zh:'椅子',cat:'物品'},
+  {id:176,jp:'机',read:'つくえ',rom:'tsukue',zh:'桌子',cat:'物品'},
+  {id:177,jp:'窓',read:'まど',rom:'mado',zh:'窗戶',cat:'物品'},
+  {id:178,jp:'ドア',read:'ドア',rom:'doa',zh:'門',cat:'物品'},
+  {id:179,jp:'何',read:'なに',rom:'nani',zh:'什麼',cat:'疑問'},
+  {id:180,jp:'誰',read:'だれ',rom:'dare',zh:'誰',cat:'疑問'},
+  {id:181,jp:'どこ',read:'どこ',rom:'doko',zh:'哪裡',cat:'疑問'},
+  {id:182,jp:'いつ',read:'いつ',rom:'itsu',zh:'什麼時候',cat:'疑問'},
+  {id:183,jp:'どうして',read:'どうして',rom:'doushite',zh:'為什麼',cat:'疑問'},
+  {id:184,jp:'どんな',read:'どんな',rom:'donna',zh:'什麼樣的',cat:'疑問'},
+  {id:185,jp:'いくら',read:'いくら',rom:'ikura',zh:'多少錢',cat:'疑問'},
+  {id:186,jp:'いくつ',read:'いくつ',rom:'ikutsu',zh:'幾個',cat:'疑問'},
+  {id:187,jp:'とても',read:'とても',rom:'totemo',zh:'非常',cat:'副詞'},
+  {id:188,jp:'少し',read:'すこし',rom:'sukoshi',zh:'一點點',cat:'副詞'},
+  {id:189,jp:'もう',read:'もう',rom:'mou',zh:'已經',cat:'副詞'},
+  {id:190,jp:'まだ',read:'まだ',rom:'mada',zh:'還',cat:'副詞'},
+  {id:191,jp:'また',read:'また',rom:'mata',zh:'再次',cat:'副詞'},
+  {id:192,jp:'一緒に',read:'いっしょに',rom:'issho ni',zh:'一起',cat:'副詞'},
+  {id:193,jp:'ゆっくり',read:'ゆっくり',rom:'yukkuri',zh:'慢慢地',cat:'副詞'},
+  {id:194,jp:'早く',read:'はやく',rom:'hayaku',zh:'快點',cat:'副詞'},
+  {id:195,jp:'たぶん',read:'たぶん',rom:'tabun',zh:'大概',cat:'副詞'},
+  {id:196,jp:'絶対',read:'ぜったい',rom:'zettai',zh:'絕對',cat:'副詞'},
+  {id:197,jp:'本当に',read:'ほんとうに',rom:'hontouni',zh:'真的',cat:'副詞'},
+  {id:198,jp:'大丈夫',read:'だいじょうぶ',rom:'daijoubu',zh:'沒關係／可以',cat:'副詞'},
+  {id:199,jp:'色々',read:'いろいろ',rom:'iroiro',zh:'各種各樣',cat:'副詞'},
+  {id:200,jp:'全部',read:'ぜんぶ',rom:'zenbu',zh:'全部',cat:'副詞'},
+];
+
+// ── STORAGE ──────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'jpvocab_v2';
+
+function loadState() {
+  try { const r = localStorage.getItem(STORAGE_KEY); if (r) return JSON.parse(r); } catch(e) {}
+  return null;
+}
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ progress, poolIds, poolSize }));
+}
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let progress = {};  // id -> 'learned' | 'again' | undefined
+let poolIds = [];   // ids currently in learning pool
+let poolSize = 20;
+let bag = [];
+let currentWord = null;
+let isFlipped = false;
+let filter = 'pool';
+let sessionLearned = 0;
+let pendingNewWord = false;
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function wordById(id) { return WORDS.find(w => w.id === id); }
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i+1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getUnseenIds() {
+  const inPool = new Set(poolIds);
+  return WORDS.map(w => w.id).filter(id => !progress[id] && !inPool.has(id));
+}
+
+// ── POOL ──────────────────────────────────────────────────────────────────────
+function initPool() {
+  const unseen = shuffle(getUnseenIds());
+  poolIds = unseen.slice(0, poolSize);
+}
+
+function replenishPool() {
+  // Pool shrank by 1 (learned). Add one new unseen word.
+  if (poolIds.length >= poolSize) return false;
+  const unseen = getUnseenIds();
+  if (unseen.length === 0) return false;
+  const newId = unseen[Math.floor(Math.random() * unseen.length)];
+  poolIds.push(newId);
+  // Insert the new word near the front of bag so it appears soon (within 1-3 cards)
+  const insertAt = Math.min(Math.floor(Math.random() * 3), bag.length);
+  bag.splice(bag.length - insertAt, 0, newId);
+  pendingNewWord = newId;
+  return true;
+}
+
+// ── BAG ───────────────────────────────────────────────────────────────────────
+function getActiveIds() {
+  if (filter === 'pool') return [...poolIds];
+  if (filter === 'learned') return WORDS.map(w=>w.id).filter(id => progress[id] === 'learned');
+  return WORDS.map(w => w.id);
+}
+
+function refillBag() {
+  bag = shuffle(getActiveIds());
+}
+
+// ── CARD ──────────────────────────────────────────────────────────────────────
+function showCard(id) {
+  const word = wordById(id);
+  if (!word) { nextCard(); return; }
+  currentWord = word;
+  isFlipped = false;
+
+  const isNew = (pendingNewWord === id);
+  if (isNew) pendingNewWord = false;
+
+  document.getElementById('card-wrapper').classList.remove('flipped');
+
+  const activeIds = getActiveIds();
+  const pos = filter === 'pool'
+    ? `${poolIds.indexOf(id)+1} / ${poolIds.length}`
+    : `${activeIds.indexOf(id)+1} / ${activeIds.length}`;
+
+  document.getElementById('card-corner').textContent = pos;
+  document.getElementById('card-corner-back').textContent = pos;
+  document.getElementById('card-category').textContent = word.cat;
+  document.getElementById('card-jp').textContent = word.jp;
+  document.getElementById('card-reading').textContent = word.read;
+  document.getElementById('card-meaning').textContent = word.zh;
+  document.getElementById('card-romaji').textContent = word.rom;
+  document.getElementById('remain-count').textContent = bag.length;
+
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot ' + (progress[id] || '');
+  document.getElementById('new-badge').className = 'new-badge' + (isNew ? ' show' : '');
+
+  const area = document.getElementById('card-area');
+  area.classList.remove('animate');
+  void area.offsetWidth;
+  area.classList.add('animate');
+}
+
+function flipCard() {
+  isFlipped = !isFlipped;
+  document.getElementById('card-wrapper').classList.toggle('flipped', isFlipped);
+}
+
+function nextCard() {
+  const active = getActiveIds();
+  if (active.length === 0) { showEmpty(); return; }
+
+  if (bag.length === 0) refillBag();
+
+  // Pop bag, skip ids no longer in active pool
+  let id = null;
+  while (bag.length > 0) {
+    const candidate = bag.pop();
+    if (active.includes(candidate)) { id = candidate; break; }
+  }
+  if (id === null) {
+    refillBag();
+    if (bag.length === 0) { showEmpty(); return; }
+    id = bag.pop();
+  }
+
+  document.getElementById('card-area').style.display = '';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('actions').style.display = '';
+  showCard(id);
+}
+
+function showEmpty() {
+  document.getElementById('card-area').style.display = 'none';
+  document.getElementById('actions').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'block';
+
+  const unseenLeft = getUnseenIds().length;
+  if (filter === 'pool' && poolIds.length === 0 && unseenLeft === 0) {
+    document.getElementById('empty-icon').textContent = '🏆';
+    document.getElementById('empty-msg').innerHTML = '恭喜！所有 200 個單詞都學完了！';
+    document.getElementById('empty-btn').textContent = '從頭複習';
+  } else if (filter === 'pool' && poolIds.length === 0) {
+    document.getElementById('empty-icon').textContent = '🎉';
+    document.getElementById('empty-msg').innerHTML = `學習池的單詞都學完了！<br>還有 ${unseenLeft} 個新單詞，補充進池繼續學。`;
+    document.getElementById('empty-btn').textContent = '補充新單詞';
+  } else {
+    document.getElementById('empty-icon').textContent = '✨';
+    document.getElementById('empty-msg').innerHTML = `這輪看完了！<br>池中還有 ${poolIds.length} 個單詞。`;
+    document.getElementById('empty-btn').textContent = '再來一輪';
+  }
+}
+
+function handleEmptyBtn() {
+  if (filter === 'pool' && poolIds.length === 0) initPool();
+  bag = [];
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('card-area').style.display = '';
+  document.getElementById('actions').style.display = '';
+  nextCard();
+}
+
+// ── MARKING ───────────────────────────────────────────────────────────────────
+function markLearned() {
+  if (!currentWord) return;
+  const id = currentWord.id;
+  progress[id] = 'learned';
+  poolIds = poolIds.filter(x => x !== id);
+  bag = bag.filter(x => x !== id);
+  sessionLearned++;
+  document.getElementById('session-learned').textContent = sessionLearned;
+  if (filter === 'pool') replenishPool();
+  saveState();
+  updateStatusUI();
+  nextCard();
+}
+
+function markAgain() {
+  if (!currentWord) return;
+  progress[currentWord.id] = 'again';
+  saveState();
+  updateStatusUI();
+  nextCard();
+}
+
+// ── FILTER ────────────────────────────────────────────────────────────────────
+function setFilter(f) {
+  filter = f;
+  ['pool','learned','all'].forEach(k =>
+    document.getElementById('tab-'+k).classList.toggle('active', k === f));
+  bag = [];
+  sessionLearned = 0;
+  document.getElementById('session-learned').textContent = 0;
+  nextCard();
+}
+
+// ── UI STATUS ─────────────────────────────────────────────────────────────────
+function updateStatusUI() {
+  const learnedCount = WORDS.filter(w => progress[w.id] === 'learned').length;
+  const againCount = poolIds.filter(id => progress[id] === 'again').length;
+  const freshCount = poolIds.filter(id => !progress[id]).length;
+  const total = WORDS.length;
+
+  document.getElementById('stat-pool').textContent = poolIds.length;
+  document.getElementById('stat-learned').textContent = learnedCount;
+  document.getElementById('stat-total').textContent = total;
+
+  document.getElementById('bar-learned').style.width = (learnedCount/total*100).toFixed(1)+'%';
+  document.getElementById('bar-again').style.width = (againCount/total*100).toFixed(1)+'%';
+  document.getElementById('bar-fresh').style.width = (freshCount/total*100).toFixed(1)+'%';
+
+  // Pool chips
+  const pl = document.getElementById('pool-list');
+  pl.innerHTML = '';
+  poolIds.forEach(id => {
+    const w = wordById(id);
+    if (!w) return;
+    const chip = document.createElement('div');
+    chip.className = 'pool-word-chip ' + (progress[id] || '');
+    chip.textContent = w.jp;
+    pl.appendChild(chip);
+  });
+}
+
+function togglePoolList() {
+  document.getElementById('pool-list').classList.toggle('open');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+function updatePoolSizeDisplay(v) {
+  document.getElementById('pool-size-display').textContent = v;
+}
+
+function openModal() {
+  document.getElementById('pool-size-slider').value = poolSize;
+  document.getElementById('pool-size-display').textContent = poolSize;
+  document.getElementById('pool-size-cur').textContent = poolSize;
+
+  const learnedCount = WORDS.filter(w => progress[w.id] === 'learned').length;
+  const againCount = poolIds.filter(id => progress[id] === 'again').length;
+  const freshCount = poolIds.filter(id => !progress[id]).length;
+  document.getElementById('modal-stats').innerHTML =
+    `學習池中：<span>${poolIds.length} 個</span><br>` +
+    `　學習中（還沒會）：<span>${againCount} 個</span><br>` +
+    `　全新未見：<span>${freshCount} 個</span><br>` +
+    `已學會（移出池）：<span>${learnedCount} 個</span><br>` +
+    `尚未進池：<span>${getUnseenIds().length} 個</span><br>` +
+    `總單詞：<span>${WORDS.length} 個</span>`;
+
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function closeModal() {
+  const newSize = parseInt(document.getElementById('pool-size-slider').value);
+  if (newSize !== poolSize) {
+    poolSize = newSize;
+    document.getElementById('pool-size-cur').textContent = poolSize;
+    // Expand pool if needed
+    if (poolIds.length < poolSize) {
+      const unseen = shuffle(getUnseenIds());
+      const add = unseen.slice(0, poolSize - poolIds.length);
+      poolIds.push(...add);
+      bag = [];
+    }
+    saveState();
+    updateStatusUI();
+  }
+  document.getElementById('modal-bg').classList.remove('open');
+}
+
+function closeModalBg(e) {
+  if (e.target === document.getElementById('modal-bg')) closeModal();
+}
+
+function exportProgress() {
+  const data = { version: 2, date: new Date().toISOString(), progress, poolIds, poolSize };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'jp-vocab-progress.json';
+  a.click();
+}
+
+function importProgress(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.progress) {
+        progress = data.progress;
+        poolIds = data.poolIds || [];
+        poolSize = data.poolSize || 20;
+        if (poolIds.length === 0) initPool();
+        saveState(); updateStatusUI(); bag = []; nextCard(); closeModal();
+        alert('進度匯入成功！');
+      }
+    } catch(err) { alert('檔案格式錯誤'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function resetProgress() {
+  if (!confirm('確定要重置所有進度嗎？')) return;
+  progress = {}; poolIds = []; sessionLearned = 0;
+  document.getElementById('session-learned').textContent = 0;
+  initPool(); bag = []; saveState(); updateStatusUI(); nextCard(); closeModal();
+}
+
+// ── SWIPE ─────────────────────────────────────────────────────────────────────
+let tx = 0, ty = 0;
+document.getElementById('card-area').addEventListener('touchstart', e => {
+  tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+}, {passive:true});
+document.getElementById('card-area').addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - tx;
+  const dy = e.changedTouches[0].clientY - ty;
+  if (Math.abs(dx) < Math.abs(dy) || Math.abs(dx) < 55) return;
+  if (dx > 0) markLearned(); else markAgain();
+}, {passive:true});
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+const saved = loadState();
+if (saved && saved.poolIds && saved.poolIds.length > 0) {
+  progress = saved.progress || {};
+  poolIds  = saved.poolIds;
+  poolSize = saved.poolSize || 20;
+} else if (saved) {
+  progress = saved.progress || {};
+  poolSize = saved.poolSize || 20;
+  initPool();
+} else {
+  initPool();
+}
+
+updateStatusUI();
+nextCard();
+</script>
+</body>
+</html>

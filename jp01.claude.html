@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+<title>五十音練習</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=DM+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1209;
+    --paper: #f5f0e8;
+    --paper2: #ede7d5;
+    --red: #c0392b;
+    --gold: #b8860b;
+    --green: #2d6a4f;
+    --muted: #7a6a55;
+    --border: #c8b99a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(0,0,0,0.04) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(0,0,0,0.02) 40px);
+  }
+
+  .container {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  h1 {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 1.1rem;
+    text-align: center;
+    letter-spacing: 0.3em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  /* Mode buttons */
+  .mode-btns {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: 10px 6px;
+    border: 1.5px solid var(--border);
+    background: var(--paper2);
+    color: var(--muted);
+    font-family: 'Noto Serif JP', serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+
+  .mode-btn.active {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  /* Card */
+  .card {
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 4px 4px 0 var(--border);
+    padding: 36px 24px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold), var(--red));
+  }
+
+  .progress-info {
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-align: center;
+  }
+
+  .kana-display {
+    font-family: 'Noto Serif JP', serif;
+    font-size: clamp(72px, 22vw, 110px);
+    line-height: 1;
+    color: var(--ink);
+    text-align: center;
+    transition: transform 0.2s, opacity 0.2s;
+    user-select: none;
+  }
+
+  .kana-display.pop {
+    animation: pop 0.3s ease;
+  }
+
+  @keyframes pop {
+    0% { transform: scale(0.6); opacity: 0; }
+    70% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Input area */
+  .input-row {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+  }
+
+  #answer-input {
+    flex: 1;
+    padding: 12px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 1.1rem;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    background: var(--paper);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+
+  #answer-input:focus {
+    border-color: var(--gold);
+  }
+
+  #answer-input.correct-border { border-color: var(--green); }
+  #answer-input.wrong-border { border-color: var(--red); }
+
+  .submit-btn {
+    padding: 12px 18px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+
+  .submit-btn:active { opacity: 0.7; }
+
+  /* Result */
+  .result-box {
+    width: 100%;
+    padding: 16px;
+    border-radius: 4px;
+    text-align: center;
+    font-family: 'Noto Serif JP', serif;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    animation: fadeIn 0.25s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-box.correct {
+    background: #e8f5ee;
+    border: 1.5px solid #a8d5b5;
+    display: flex;
+  }
+
+  .result-box.wrong {
+    background: #fdf0ee;
+    border: 1.5px solid #e8b0a8;
+    display: flex;
+  }
+
+  .result-verdict {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+
+  .correct .result-verdict { color: var(--green); }
+  .wrong .result-verdict { color: var(--red); }
+
+  .result-answer {
+    font-size: 1rem;
+    color: var(--ink);
+  }
+
+  .next-btn {
+    margin-top: 4px;
+    padding: 12px;
+    width: 100%;
+    background: transparent;
+    border: 1.5px solid var(--ink);
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+
+  .next-btn:hover { background: var(--ink); color: var(--paper); }
+
+  /* Stats bar */
+  .stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    padding: 0 2px;
+  }
+
+  .stat-item span { color: var(--ink); font-weight: 500; }
+
+  /* Round badge */
+  .round-badge {
+    position: absolute;
+    top: 12px; right: 12px;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* Hint row toggle */
+  .hint-toggle {
+    font-size: 0.7rem;
+    color: var(--border);
+    text-align: center;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    user-select: none;
+  }
+
+  .hint-row {
+    display: none;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .hint-row.visible { display: flex; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>五十音 練習帳</h1>
+
+  <div class="mode-btns">
+    <button class="mode-btn active" onclick="setMode('hira')">平假名<br>ひらがな</button>
+    <button class="mode-btn" onclick="setMode('kata')">片假名<br>カタカナ</button>
+    <button class="mode-btn" onclick="setMode('mix')">混合<br>Mix</button>
+  </div>
+
+  <div class="card">
+    <div class="round-badge" id="round-badge">第 1 輪</div>
+    <div class="progress-info" id="progress-info">1 / 46</div>
+    <div class="kana-display" id="kana-char">あ</div>
+    <div class="input-row">
+      <input type="text" id="answer-input" placeholder="輸入羅馬拼音…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text" enterkeyhint="send" />
+      <button class="submit-btn" onclick="checkAnswer()">確認</button>
+    </div>
+    <div class="result-box" id="result-box">
+      <div class="result-verdict" id="result-verdict"></div>
+      <div class="result-answer" id="result-answer"></div>
+      <button class="next-btn" id="next-btn" onclick="nextQuestion()">下一題 →</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-item">正確 <span id="stat-correct">0</span></div>
+    <div class="stat-item">錯誤 <span id="stat-wrong">0</span></div>
+    <div class="stat-item">本輪剩餘 <span id="stat-remain">46</span></div>
+  </div>
+
+  <div class="hint-toggle" onclick="toggleHint()">▾ 顯示五十音表參考</div>
+  <div class="hint-row" id="hint-row"></div>
+</div>
+
+<script>
+const hiragana = [
+  {char:'あ',rom:'a'},{char:'い',rom:'i'},{char:'う',rom:'u'},{char:'え',rom:'e'},{char:'お',rom:'o'},
+  {char:'か',rom:'ka'},{char:'き',rom:'ki'},{char:'く',rom:'ku'},{char:'け',rom:'ke'},{char:'こ',rom:'ko'},
+  {char:'さ',rom:'sa'},{char:'し',rom:'shi'},{char:'す',rom:'su'},{char:'せ',rom:'se'},{char:'そ',rom:'so'},
+  {char:'た',rom:'ta'},{char:'ち',rom:'chi'},{char:'つ',rom:'tsu'},{char:'て',rom:'te'},{char:'と',rom:'to'},
+  {char:'な',rom:'na'},{char:'に',rom:'ni'},{char:'ぬ',rom:'nu'},{char:'ね',rom:'ne'},{char:'の',rom:'no'},
+  {char:'は',rom:'ha'},{char:'ひ',rom:'hi'},{char:'ふ',rom:'fu'},{char:'へ',rom:'he'},{char:'ほ',rom:'ho'},
+  {char:'ま',rom:'ma'},{char:'み',rom:'mi'},{char:'む',rom:'mu'},{char:'め',rom:'me'},{char:'も',rom:'mo'},
+  {char:'や',rom:'ya'},{char:'ゆ',rom:'yu'},{char:'よ',rom:'yo'},
+  {char:'ら',rom:'ra'},{char:'り',rom:'ri'},{char:'る',rom:'ru'},{char:'れ',rom:'re'},{char:'ろ',rom:'ro'},
+  {char:'わ',rom:'wa'},{char:'を',rom:'wo'},{char:'ん',rom:'n'},
+];
+
+const katakana = [
+  {char:'ア',rom:'a'},{char:'イ',rom:'i'},{char:'ウ',rom:'u'},{char:'エ',rom:'e'},{char:'オ',rom:'o'},
+  {char:'カ',rom:'ka'},{char:'キ',rom:'ki'},{char:'ク',rom:'ku'},{char:'ケ',rom:'ke'},{char:'コ',rom:'ko'},
+  {char:'サ',rom:'sa'},{char:'シ',rom:'shi'},{char:'ス',rom:'su'},{char:'セ',rom:'se'},{char:'ソ',rom:'so'},
+  {char:'タ',rom:'ta'},{char:'チ',rom:'chi'},{char:'ツ',rom:'tsu'},{char:'テ',rom:'te'},{char:'ト',rom:'to'},
+  {char:'ナ',rom:'na'},{char:'ニ',rom:'ni'},{char:'ヌ',rom:'nu'},{char:'ネ',rom:'ne'},{char:'ノ',rom:'no'},
+  {char:'ハ',rom:'ha'},{char:'ヒ',rom:'hi'},{char:'フ',rom:'fu'},{char:'ヘ',rom:'he'},{char:'ホ',rom:'ho'},
+  {char:'マ',rom:'ma'},{char:'ミ',rom:'mi'},{char:'ム',rom:'mu'},{char:'メ',rom:'me'},{char:'モ',rom:'mo'},
+  {char:'ヤ',rom:'ya'},{char:'ユ',rom:'yu'},{char:'ヨ',rom:'yo'},
+  {char:'ラ',rom:'ra'},{char:'リ',rom:'ri'},{char:'ル',rom:'ru'},{char:'レ',rom:'re'},{char:'ロ',rom:'ro'},
+  {char:'ワ',rom:'wa'},{char:'ヲ',rom:'wo'},{char:'ン',rom:'n'},
+];
+
+// Alternate accepted readings
+const altRom = {
+  'shi': ['si'], 'chi': ['ti'], 'tsu': ['tu'], 'fu': ['hu'],
+  'ja': ['zya'], 'ji': ['zi','di'], 'ju': ['zyu'], 'wo': ['o'],
+  'n': ['nn','m'],
+};
+
+// Build reverse lookup for alt
+const altLookup = {};
+for (const [main, alts] of Object.entries(altRom)) {
+  for (const a of alts) altLookup[a] = main;
+}
+
+let mode = 'hira';
+let pool = [];
+let bag = [];
+let current = null;
+let round = 1;
+let statsCorrect = 0;
+let statsWrong = 0;
+let answered = false;
+
+function getPool() {
+  if (mode === 'hira') return hiragana;
+  if (mode === 'kata') return katakana;
+  // mix: pair each hira with its kata equivalent
+  return hiragana.map((h, i) => Math.random() < 0.5 ? h : katakana[i]);
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function refillBag() {
+  pool = getPool();
+  bag = shuffle(pool);
+  round++;
+  document.getElementById('round-badge').textContent = `第 ${round} 輪`;
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['hira','kata','mix'][i] === m);
+  });
+  round = 0;
+  statsCorrect = 0;
+  statsWrong = 0;
+  document.getElementById('stat-correct').textContent = 0;
+  document.getElementById('stat-wrong').textContent = 0;
+  bag = [];
+  answered = false;
+  hideResult();
+  nextQuestion();
+}
+
+function nextQuestion() {
+  if (bag.length === 0) refillBag();
+  current = bag.pop();
+  answered = false;
+
+  const el = document.getElementById('kana-char');
+  el.textContent = current.char;
+  el.classList.remove('pop');
+  void el.offsetWidth;
+  el.classList.add('pop');
+
+  document.getElementById('progress-info').textContent =
+    `${pool.length - bag.length} / ${pool.length}`;
+  document.getElementById('stat-remain').textContent = bag.length;
+
+  const input = document.getElementById('answer-input');
+  input.value = '';
+  input.className = '';
+  input.disabled = false;
+  hideResult();
+  // Focus input to keep keyboard up
+  setTimeout(() => input.focus(), 50);
+}
+
+function normalize(s) {
+  s = s.trim().toLowerCase();
+  return altLookup[s] || s;
+}
+
+function checkAnswer() {
+  if (answered) { nextQuestion(); return; }
+  const input = document.getElementById('answer-input');
+  const userRaw = input.value.trim();
+  if (!userRaw) return;
+
+  const user = normalize(userRaw);
+  const correct = normalize(current.rom);
+  const isCorrect = user === correct;
+
+  answered = true;
+  input.disabled = false; // keep enabled for next enter
+
+  if (isCorrect) {
+    statsCorrect++;
+    document.getElementById('stat-correct').textContent = statsCorrect;
+    input.classList.add('correct-border');
+    showResult(true, current.char, current.rom);
+  } else {
+    statsWrong++;
+    document.getElementById('stat-wrong').textContent = statsWrong;
+    input.classList.add('wrong-border');
+    showResult(false, current.char, current.rom);
+  }
+
+  // Re-focus so keyboard stays and next Enter works
+  setTimeout(() => input.focus(), 30);
+}
+
+function showResult(correct, char, rom) {
+  const box = document.getElementById('result-box');
+  const verdict = document.getElementById('result-verdict');
+  const answer = document.getElementById('result-answer');
+
+  box.className = 'result-box ' + (correct ? 'correct' : 'wrong');
+  verdict.textContent = correct ? '✓ 正確！' : '✗ 答錯了';
+  answer.textContent = `${char} 的讀音是：${rom}`;
+}
+
+function hideResult() {
+  document.getElementById('result-box').className = 'result-box';
+}
+
+// Enter key handling
+document.getElementById('answer-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (!answered) checkAnswer();
+    else nextQuestion();
+  }
+});
+
+// Hint table
+function buildHintRow() {
+  const hr = document.getElementById('hint-row');
+  hiragana.forEach((h, i) => {
+    const k = katakana[i];
+    const span = document.createElement('span');
+    span.style.cssText = 'font-family:Noto Serif JP,serif;font-size:0.68rem;color:var(--muted);padding:2px 4px;border:1px solid var(--border);border-radius:2px;line-height:1.4;text-align:center;';
+    span.innerHTML = `${h.char}${k.char}<br>${h.rom}`;
+    hr.appendChild(span);
+  });
+}
+
+function toggleHint() {
+  const hr = document.getElementById('hint-row');
+  hr.classList.toggle('visible');
+}
+
+// Init
+buildHintRow();
+bag = [];
+round = 0;
+nextQuestion();
+</script>
+</body>
+</html>
