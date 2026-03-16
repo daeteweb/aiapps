@@ -3,7 +3,7 @@ name: Auto Update Sidebar List
 on:
   push:
     paths:
-      - '*.html'
+      - 'apps/*.html'  # 監控 apps 資料夾下的變動
 
 jobs:
   build:
@@ -16,12 +16,12 @@ jobs:
         run: |
           echo "[" > filelist.json
           first=true
-          for f in *.html; do
-            # 排除 index.html 避免無限迴圈
-            if [ "$f" != "index.html" ]; then
-              # 抓取 <title> 標籤內容，若無則顯示檔名
+          # 掃描 apps 資料夾
+          for f in apps/*.html; do
+            if [ -f "$f" ]; then
               title=$(grep -oP '(?<=<title>).*?(?=</title>)' "$f" || echo "$f")
               if [ "$first" = true ]; then first=false; else echo "," >> filelist.json; fi
+              # 將路徑存入 JSON
               echo "{\"path\": \"$f\", \"title\": \"$title\"}" >> filelist.json
             fi
           done
