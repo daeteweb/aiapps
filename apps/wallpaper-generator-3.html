@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>✦ WALLCRAFT — AI桌布產生器</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --panel: #111118;
+    --panel2: #18181f;
+    --border: #2a2a38;
+    --accent: #7c6bff;
+    --accent2: #ff6b9d;
+    --accent3: #6bffd8;
+    --text: #e8e8f0;
+    --text2: #888899;
+    --text3: #555566;
+    --radius: 10px;
+    --gap: 14px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--panel);
+  }
+  header h1 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -.5px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  header .sub { font-size: .75rem; color: var(--text3); font-family: 'Space Mono', monospace; margin-left: auto; }
+
+  /* Layout toggle button */
+  .layout-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--panel2);
+    color: var(--text2);
+    font-family: 'Space Mono', monospace;
+    font-size: .68rem;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .layout-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .layout-toggle-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* ── SIDE layout (default): sidebar left, preview right ── */
+  .main-layout {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    overflow: hidden;
+    height: calc(100vh - 61px);
+    transition: none;
+  }
+
+  /* ── BOTTOM layout: preview top, sidebar below ── */
+  .main-layout.layout-bottom {
+    flex-direction: column;
+    height: calc(100vh - 61px);
+  }
+
+  /* Sidebar — side mode */
+  .sidebar {
+    width: 340px;
+    min-width: 300px;
+    max-width: 340px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  /* Sidebar — bottom mode */
+  .layout-bottom .sidebar {
+    width: 100%;
+    max-width: 100%;
+    height: 46vh;
+    min-height: 200px;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* horizontal scroll within sections */
+  }
+
+  /* In bottom mode: sidebar sections flow in a horizontal row */
+  .layout-bottom .sidebar {
+    width: 100%;
+    max-width: 100%;
+    height: 46vh;
+    min-height: 180px;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    padding: 12px;
+    gap: 8px;
+  }
+  .layout-bottom .sidebar > .section {
+    flex: 0 0 calc(50% - 4px);
+    min-width: 260px;
+  }
+  .layout-bottom .sidebar > .btn-row {
+    flex: 0 0 100%;
+    width: 100%;
+  }
+  .layout-bottom .sidebar > .btn {
+    flex: 0 0 100%;
+    width: 100%;
+  }
+
+  /* Side-by-side 3-col on wide screens in bottom mode */
+  @media (min-width: 1100px) {
+    .layout-bottom .sidebar > .section {
+      flex: 0 0 calc(33.33% - 6px);
+    }
+  }
+  @media (max-width: 600px) {
+    .layout-bottom .sidebar > .section {
+      flex: 0 0 100%;
+    }
+  }
+
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .section {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .section-header {
+    padding: 10px 14px;
+    font-size: .78rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text2);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+    transition: background .15s;
+  }
+  .section-header:hover { background: rgba(124,107,255,.08); }
+  .section-header.open { border-bottom-color: var(--border); color: var(--text); }
+  .section-header .arrow { transition: transform .2s; font-size: .65rem; }
+  .section-header.open .arrow { transform: rotate(90deg); }
+  .section-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .section-body.hidden { display: none; }
+  label { font-size: .75rem; color: var(--text2); margin-bottom: 3px; display: block; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-family: 'Space Mono', monospace;
+    font-size: .76rem;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+  }
+  select option { background: #1a1a2e; }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row > * { flex: 1; }
+  input[type=color] {
+    width: 100%;
+    height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    cursor: pointer;
+    padding: 2px;
+  }
+  .color-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .color-grid label { text-align: center; font-size: .65rem; }
+  .color-swatch-wrap { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+  .btn {
+    padding: 9px 16px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--panel2);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: .78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #9585ff; }
+  .btn.danger { border-color: var(--accent2); color: var(--accent2); }
+  .btn.success { background: var(--accent3); border-color: var(--accent3); color: #0a0a0f; font-weight: 700; }
+  .btn.success:hover { background: #88ffe8; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row > * { flex: 1; }
+  .chip-group { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    font-size: .72rem;
+    cursor: pointer;
+    transition: all .12s;
+    user-select: none;
+  }
+  .chip:hover { background: rgba(124,107,255,.18); border-color: var(--accent); color: var(--text); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  .chip.active:hover { background: #9585ff; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .range-row { display: flex; align-items: center; gap: 8px; }
+  .range-row input[type=range] { flex: 1; }
+  .range-val { font-family: 'Space Mono', monospace; font-size: .72rem; color: var(--accent); min-width: 36px; text-align: right; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; }
+  .toggle-label { font-size: .76rem; color: var(--text2); }
+  .toggle {
+    position: relative; width: 38px; height: 20px; cursor: pointer;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0; background: var(--border);
+    border-radius: 20px; transition: background .2s;
+  }
+  .toggle input:checked ~ .toggle-track { background: var(--accent); }
+  .toggle-thumb {
+    position: absolute; top: 3px; left: 3px;
+    width: 14px; height: 14px; background: white;
+    border-radius: 50%; transition: transform .2s;
+  }
+  .toggle input:checked ~ .toggle-thumb { transform: translateX(18px); }
+  .color-palette-list { display: flex; flex-direction: column; gap: 6px; }
+  .palette-item {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 8px;
+  }
+  .palette-swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,.1); cursor: pointer; }
+  .palette-item span { flex: 1; font-family: 'Space Mono', monospace; font-size: .7rem; color: var(--text2); }
+  .palette-remove { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 1rem; transition: color .15s; }
+  .palette-remove:hover { color: var(--accent2); }
+  .preset-palettes { display: flex; flex-direction: column; gap: 5px; }
+  .preset-palette-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; cursor: pointer;
+    transition: border-color .15s;
+  }
+  .preset-palette-btn:hover { border-color: var(--accent); }
+  .preset-palette-btn span { font-size: .72rem; color: var(--text2); }
+  .preset-swatches { display: flex; gap: 3px; }
+  .preset-sw { width: 16px; height: 16px; border-radius: 3px; }
+
+  /* Preview — side mode */
+  .preview-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #07070c;
+    overflow: hidden;
+    min-width: 0;
+  }
+  /* Preview — bottom mode */
+  .layout-bottom .preview-area {
+    flex: 0 0 auto;
+    height: 54vh;
+    min-height: 220px;
+  }
+  .preview-toolbar {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  .preview-toolbar .info { font-family: 'Space Mono', monospace; font-size: .7rem; color: var(--text3); margin-left: auto; }
+  .preview-wrap {
+    flex: 1;
+    display: block;
+    overflow: auto;
+    padding: 20px;
+    background: repeating-conic-gradient(#141420 0% 25%, #0e0e1a 0% 50%) 0 0 / 20px 20px;
+  }
+  #previewCanvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    box-shadow: 0 8px 60px rgba(0,0,0,.7);
+    border-radius: 3px;
+    margin: 0 auto;
+  }
+  .ai-badge {
+    position: fixed;
+    bottom: 14px;
+    right: 16px;
+    font-family: 'Space Mono', monospace;
+    font-size: .62rem;
+    color: var(--text3);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 20px;
+    letter-spacing: .5px;
+    pointer-events: none;
+    z-index: 99;
+  }
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(124,107,255,.05); }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-zone p { font-size: .74rem; color: var(--text3); }
+  .upload-zone .icon { font-size: 1.4rem; margin-bottom: 4px; }
+  #uploadPreview { max-width: 100%; max-height: 80px; border-radius: 4px; margin-top: 8px; display: none; }
+  .section-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:1.4rem">✦</span>
+  <h1>WALLCRAFT</h1>
+  <span style="font-family:'Space Mono',monospace;font-size:.7rem;color:var(--text3)" id="headerSub">AI-Powered Wallpaper Studio</span>
+  <button class="layout-toggle-btn" id="layoutToggleBtn" onclick="toggleLayout()" title="切換預覽位置">
+    <svg id="layoutIcon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+      <!-- side layout icon -->
+      <rect x="2" y="3" width="6" height="14" rx="1.5"/>
+      <rect x="10" y="3" width="8" height="14" rx="1.5"/>
+    </svg>
+    <span id="layoutLabel">下移預覽</span>
+  </button>
+  <span class="sub">v1.0</span>
+</header>
+
+<div class="main-layout" id="mainLayout">
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebarEl">
+
+    <!-- 1. Canvas Size -->
+    <div class="section">
+      <div class="section-header open" onclick="toggleSection(this)">
+        <span><span class="section-dot" style="background:#7c6bff"></span>畫布尺寸</span>
+        <span class="arrow">▶</span>
+      </div>
+      <div class="section-body">
+        <div>
+          <label>預設解析度</label>
+          <select id="presetRes" onchange="applyPreset()">
+            <option value="">自訂</option>
+            <option value="1920x1080">1920×1080 (Full HD)</option>
+            <option value="2560x1440">2560×1440 (2K QHD)</option>
+            <option value="3840x2160">3840×2160 (4K UHD)</option>
+            <option value="1280x720">1280×720 (HD)</option>
+            <option value="1366x768">1366×768 (常用筆電)</option>
+            <option value="2560x1600">2560×1600 (MacBook)</option>
+            <option value="1080x1920">1080×1920 (手機直式)</option>
+            <option value="1920x1080" selected>1920×1080 (Full HD)</option>
+          </select>
+        </div>
+        <div class="row">
+          <div>
+            <label>寬度 (px)</label>
+            <input type="number" id="canvasW" value="1920" min="100" max="7680" oninput="debouncedRender()">
+          </div>
+          <div>
+            <label>高度 (px)</label>
+            <input type="number" id="canvasH" value="1080" min="100" max="4320" oninput="debouncedRender()">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Background Colors -->
+    <div class="section">
+      <div class="section-header open" onclick="toggleSection(this)">
+        <span><span class="section-dot" style="background:#ff6b9d"></span>背景顏色</span>
+        <span class="arrow">▶</span>
+      </div>
+      <div class="section-body">
+        <div class="color-grid">
+          <div class="color-swatch-wrap">
+            <label>左上</label>
+            <input type="color" id="c_tl" value="#1a0533" oninput="debouncedRender()">
+          </div>
+          <div class="color-swatch-wrap">
+            <label>右上</label>
+            <input type="color" id="c_tr" value="#0a1a40" oninput="debouncedRender()">
+          </div>
+          <div class="color-swatch-wrap">
+            <label>左下</label>
+            <input type="color" id="c_bl" value="#0d2a2a" oninput="debouncedRender()">
+          </div>
+          <div class="color-swatch-wrap">
+            <label>右下</label>
+            <input type="color" id="c_br" value="#1a1a0a" oninput="debouncedRender()">
+          </div>
+        </div>
+        <button class="btn" onclick="setSolidColor()" style="font-size:.72rem">↔ 設為同一純色</button>
+      </div>
+    </div>
+
+    <!-- 3. Background Image -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <span><span class="section-dot" style="background:#6bffd8"></span>背景圖片</span>
+        <span class="arrow">▶</span>
+      </div>
+      <div class="section-body hidden">
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="bgImageInput" accept="image/*" onchange="handleImageUpload(event)">
+          <div class="icon">🖼️</div>
+          <p>點擊或拖曳上傳圖片</p>
+        </div>
+        <img id="uploadPreview">
+        <div>
+          <label>圖片排列方式</label>
+          <select id="bgMode" onchange="debouncedRender()">
+            <option value="cover">裁切填滿 (cover)</option>
+            <option value="contain">縮放置中 (contain)</option>
+            <option value="center">置中原尺寸</option>
+            <option value="repeat">重複平鋪</option>
+            <option value="stretch">延伸拉伸</option>
+          </select>
+        </div>
+        <div class="range-row">
+          <label style="min-width:80px;margin:0">圖片透明度</label>
+          <input type="range" id="bgImageOpacity" min="0" max="100" value="100" oninput="updateVal(this,'bgImgOpVal');debouncedRender()">
+          <span class="range-val" id="bgImgOpVal">100%</span>
+        </div>
+        <button class="btn danger" onclick="clearBgImage()" style="font-size:.72rem">✕ 移除圖片</button>
+      </div>
+    </div>
+
+    <!-- 4. Shapes -->
+    <div class="section">
+      <div class="section-header open" onclick="toggleSection(this)">
+        <span><span class="section-dot" style="background:#ffcc6b"></span>散佈圖形</span>
+        <span class="arrow">▶</span>
+      </div>
+      <div class="section-body">
+        <div>
+          <label>圖形類型 <span style="color:var(--accent3);font-size:.65rem;font-family:'Space Mono',monospace">可複選</span></label>
+          <div class="chip-group" id="shapeType">
+            <div class="chip active" data-val="circle" onclick="toggleShapeChip(this);debouncedRender()">● 圓形</div>
+            <div class="chip" data-val="star" onclick="toggleShapeChip(this);debouncedRender()">★ 星形</div>
+            <div class="chip" data-val="polygon" onclick="toggleShapeChip(this);debouncedRender()">⬡ 多邊形</div>
+            <div class="chip" data-val="heart" onclick="toggleShapeChip(this);debouncedRender()">♥ 愛心</div>
+            <div class="chip" data-val="cross" onclick="toggleShapeChip(this);debouncedRender()">✚ 十字</div>
+            <div class="chip" data-val="text" onclick="toggleShapeChip(this);debouncedRender()">Aa 文字</div>
+          </div>
+        </div>
+        <div id="polygonSidesRow" style="display:none">
+          <label>多邊形邊數</label>
+          <input type="number" id="polygonSides" value="6" min="3" max="12" oninput="debouncedRender()">
+        </div>
+        <div id="textShapeRow" style="display:none">
+          <label>文字 / Emoji 內容（每行一個，隨機選取）</label>
+          <textarea id="textShapeContent" rows="3" style="resize:vertical" oninput="debouncedRender()">✦
+★
+◆
+〇
+✿
+🌙
+⚡</textarea>
+        </div>
+        <div id="starPointsRow" style="display:none">
+          <label>星形頂點數</label>
+          <input type="number" id="starPoints" value="5" min="3" max="12" oninput="debouncedRender()">
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Shape Params -->
+    <div class="section">
+      <div class="section-header open" onclick="toggleSection(this)">
+        <span><span class="section-dot" style="background:#ff9f6b"></span>圖形參數</span>
+        <span class="arrow">▶</span>
+      </div>
+      <div class="section-body">
+        <div>
+          <label>排列方式</label>
+          <div class="chip-group" id="layoutType">
+            <div class="chip active" data-val="random" onclick="selectChip(this,'layoutType');debouncedRender()">隨機散落</div>
+            <div class="chip" data-val="grid" onclick="selectChip(this,'layoutType');debouncedRender()">有序網格</div>
+            <div class="chip" data-val="diagonal" onclick="selectChip(this,'layoutType');debouncedRender()">斜線排列</div>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>最小尺寸 (px)</label>
+            <input type="number" id="sizeMin" value="10" min="2" max="500" oninput="debouncedRender()">
+          </div>
+          <div>
+            <label>最大尺寸 (px)</label>
+            <input type="number" id="sizeMax" value="60" min="2" max="500" oninput="debouncedRender()">
+          </div>
+        </div>
+        <div>
+          <div class="range-row">
+            <label style="min-width:60px;margin:0">密度</label>
+            <input type="range" id="density" min="1" max="200" value="60" oninput="updateVal(this,'densityVal');debouncedRender()">
+            <span class="range-val" id="densityVal">60</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Shape Style -->
+    <div class="section">
+      <div class="section-header open" onclick="toggleSection(this)">
+        <span><span class="section-dot" style="background:#6bc8ff"></span>圖形樣式</span>
+        <span class="arrow">▶</span>
+      </div>
+      <div class="section-body">
+        <div>
+          <label>填充方式</label>
+          <div class="chip-group" id="fillMode">
+            <div class="chip active" data-val="fill" onclick="selectChip(this,'fillMode');debouncedRender()">填充</div>
+            <div class="chip" data-val="stroke" onclick="selectChip(this,'fillMode');debouncedRender()">外框</div>
+            <div class="chip" data-val="both" onclick="selectChip(this,'fillMode');debouncedRender()">填充+外框</div>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>線條粗細</label>
+            <input type="number" id="strokeWidth" value="2" min="1" max="10" oninput="debouncedRender()">
+          </div>
+          <div>
+            <label>虛線間距(0=實線)</label>
+            <input type="number" id="dashGap" value="0" min="0" max="30" oninput="debouncedRender()">
+          </div>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">霓虹發光效果</span>
+          <label class="toggle"><input type="checkbox" id="neonGlow" onchange="debouncedRender()"><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">隨機透明度</span>
+          <label class="toggle"><input type="checkbox" id="randomOpacity" onchange="toggleOpacityMode()"><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+        </div>
+        <div id="fixedOpacityRow">
+          <div class="range-row">
+            <label style="min-width:70px;margin:0">統一透明度</label>
+            <input type="range" id="fixedOpacity" min="5" max="100" value="80" oninput="updateVal(this,'fixedOpacityVal');debouncedRender()">
+            <span class="range-val" id="fixedOpacityVal">80%</span>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">隨機旋轉</span>
+          <label class="toggle"><input type="checkbox" id="randomRotation" checked onchange="debouncedRender()"><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. Color Palette -->
+    <div class="section">
+      <div class="section-header open" onclick="toggleSection(this)">
+        <span><span class="section-dot" style="background:#d46bff"></span>圖形顏色</span>
+        <span class="arrow">▶</span>
+      </div>
+      <div class="section-body">
+        <div class="color-palette-list" id="paletteList"></div>
+        <div class="row">
+          <input type="color" id="newColor" value="#7c6bff" style="height:36px">
+          <button class="btn" onclick="addColor()" style="flex:2">+ 新增顏色</button>
+        </div>
+        <div style="margin-top:4px">
+          <label>快速套用顏色主題</label>
+          <div class="preset-palettes" id="presetPalettes"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="btn-row">
+      <button class="btn primary" onclick="reRandomShapes()">🎲 重新隨機</button>
+      <button class="btn" onclick="fullRandom()" style="border-color:var(--accent2);color:var(--accent2)">🎰 完全隨機</button>
+    </div>
+    <button class="btn success" onclick="downloadWallpaper()" style="width:100%;margin-bottom:4px">⬇ 下載桌布</button>
+  </div>
+
+  <!-- Preview Area -->
+  <div class="preview-area" id="previewAreaEl">
+    <div class="preview-toolbar">
+      <span style="font-size:.78rem;font-weight:600">預覽</span>
+      <span style="font-size:.72rem;color:var(--text3);font-family:'Space Mono',monospace" id="previewInfo">1920 × 1080</span>
+      <span class="info" id="shapeCount">圖形數量：0</span>
+    </div>
+    <div class="preview-wrap">
+      <canvas id="previewCanvas"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="ai-badge">✦ Generated by Claude (Anthropic)</div>
+
+<script>
+// ===================== STATE =====================
+let bgImage = null;
+let shapes = [];
+let renderTimer = null;
+let currentSeed = Math.random();
+
+// ===================== INIT =====================
+const presetPaletteData = [
+  { name: "宇宙紫", colors: ["#7c6bff","#ff6b9d","#6bffd8","#d46bff"] },
+  { name: "日落橘", colors: ["#ff6b35","#ff9f6b","#ffcc6b","#ff6b9d"] },
+  { name: "極光綠", colors: ["#6bffd8","#6bc8ff","#88ff6b","#6bffd8"] },
+  { name: "冰雪藍", colors: ["#6bc8ff","#a8d8ea","#e8f4f8","#4a90d9"] },
+  { name: "炎紅黑", colors: ["#ff2244","#ff6633","#ffaa00","#ffffff"] },
+  { name: "粉彩馬卡龍", colors: ["#ffb3c1","#ffd6a5","#fdffb6","#caffbf","#a0c4ff"] },
+  { name: "賽博龐克", colors: ["#00ffff","#ff00ff","#ffff00","#ffffff"] },
+  { name: "大地棕", colors: ["#8b5e3c","#c49a6c","#f0d9b5","#6b3f2a"] },
+];
+
+function initPalette() {
+  const defaults = ["#7c6bff","#ff6b9d","#6bffd8","#ffcc6b"];
+  defaults.forEach(addColorToList);
+  const pp = document.getElementById('presetPalettes');
+  presetPaletteData.forEach(p => {
+    const btn = document.createElement('div');
+    btn.className = 'preset-palette-btn';
+    btn.innerHTML = `<div class="preset-swatches">${p.colors.map(c=>`<div class="preset-sw" style="background:${c}"></div>`).join('')}</div><span>${p.name}</span>`;
+    btn.onclick = () => applyPresetPalette(p.colors);
+    pp.appendChild(btn);
+  });
+}
+
+function addColorToList(hex) {
+  const list = document.getElementById('paletteList');
+  const item = document.createElement('div');
+  item.className = 'palette-item';
+  item.innerHTML = `<div class="palette-swatch" style="background:${hex}"></div><span>${hex}</span><button class="palette-remove" onclick="this.parentElement.remove();debouncedRender()">✕</button>`;
+  item.querySelector('.palette-swatch').onclick = function() {
+    const pick = document.createElement('input');
+    pick.type='color'; pick.value=hex;
+    pick.onchange = e => {
+      this.style.background = e.target.value;
+      item.querySelector('span').textContent = e.target.value;
+      debouncedRender();
+    };
+    pick.click();
+  };
+  list.appendChild(item);
+}
+
+function addColor() {
+  const c = document.getElementById('newColor').value;
+  addColorToList(c);
+  debouncedRender();
+}
+
+function applyPresetPalette(colors) {
+  document.getElementById('paletteList').innerHTML = '';
+  colors.forEach(addColorToList);
+  debouncedRender();
+}
+
+function getPalette() {
+  return Array.from(document.querySelectorAll('#paletteList .palette-swatch')).map(s => s.style.background || s.style.backgroundColor).map(toHex).filter(Boolean);
+}
+
+function toHex(c) {
+  if (!c) return null;
+  if (c.startsWith('#')) return c;
+  const m = c.match(/\d+/g);
+  if (!m || m.length < 3) return '#ffffff';
+  return '#' + m.slice(0,3).map(x=>parseInt(x).toString(16).padStart(2,'0')).join('');
+}
+
+// ===================== UI HELPERS =====================
+function toggleSection(el) {
+  el.classList.toggle('open');
+  el.nextElementSibling.classList.toggle('hidden');
+}
+
+// Multi-select toggle for shape chips — must keep at least one active
+function toggleShapeChip(el) {
+  const activeChips = document.querySelectorAll('#shapeType .chip.active');
+  if (el.classList.contains('active') && activeChips.length <= 1) return; // keep at least one
+  el.classList.toggle('active');
+  updateShapeTypeUI();
+}
+
+// Single-select for other chip groups
+function selectChip(el, groupId) {
+  document.querySelectorAll(`#${groupId} .chip`).forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// Returns single value (for non-shapeType groups)
+function getChipVal(groupId) {
+  const a = document.querySelector(`#${groupId} .chip.active`);
+  return a ? a.dataset.val : '';
+}
+
+// Returns array of all active shape types
+function getActiveShapeTypes() {
+  return Array.from(document.querySelectorAll('#shapeType .chip.active')).map(c => c.dataset.val);
+}
+
+function updateVal(el, targetId) {
+  const v = el.value;
+  const t = document.getElementById(targetId);
+  if (t) t.textContent = targetId.includes('Opacity') || targetId.includes('Op') ? v+'%' : v;
+}
+
+function toggleOpacityMode() {
+  const r = document.getElementById('randomOpacity').checked;
+  document.getElementById('fixedOpacityRow').style.display = r ? 'none' : 'block';
+  debouncedRender();
+}
+
+function updateShapeTypeUI() {
+  const types = getActiveShapeTypes();
+  document.getElementById('polygonSidesRow').style.display = types.includes('polygon') ? 'block' : 'none';
+  document.getElementById('textShapeRow').style.display = types.includes('text') ? 'block' : 'none';
+  document.getElementById('starPointsRow').style.display = types.includes('star') ? 'block' : 'none';
+}
+
+function applyPreset() {
+  const v = document.getElementById('presetRes').value;
+  if (!v) return;
+  const [w, h] = v.split('x').map(Number);
+  document.getElementById('canvasW').value = w;
+  document.getElementById('canvasH').value = h;
+  document.getElementById('previewInfo').textContent = `${w} × ${h}`;
+  debouncedRender();
+}
+
+function setSolidColor() {
+  const c = document.getElementById('c_tl').value;
+  ['c_tr','c_bl','c_br'].forEach(id => { document.getElementById(id).value = c; });
+  debouncedRender();
+}
+
+// ===================== IMAGE =====================
+function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      bgImage = img;
+      const prev = document.getElementById('uploadPreview');
+      prev.src = ev.target.result;
+      prev.style.display = 'block';
+      debouncedRender();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearBgImage() {
+  bgImage = null;
+  document.getElementById('uploadPreview').style.display = 'none';
+  document.getElementById('bgImageInput').value = '';
+  debouncedRender();
+}
+
+// ===================== RENDER =====================
+function debouncedRender() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, 60);
+}
+
+function render() {
+  const W = parseInt(document.getElementById('canvasW').value) || 1920;
+  const H = parseInt(document.getElementById('canvasH').value) || 1080;
+  document.getElementById('previewInfo').textContent = `${W} × ${H}`;
+
+  const canvas = document.getElementById('previewCanvas');
+  const wrap = canvas.parentElement;
+  const maxW = wrap.clientWidth - 40;
+  const scale = Math.min(maxW / W, 1);
+  canvas.style.width = (W * scale) + 'px';
+  canvas.style.height = (H * scale) + 'px';
+  canvas.width = W;
+  canvas.height = H;
+
+  const ctx = canvas.getContext('2d');
+  drawBackground(ctx, W, H);
+  drawBgImage(ctx, W, H);
+  generateShapes(W, H);
+  drawShapes(ctx, W, H);
+  document.getElementById('shapeCount').textContent = `圖形數量：${shapes.length}`;
+}
+
+function drawBackground(ctx, W, H) {
+  const tl = document.getElementById('c_tl').value;
+  const tr = document.getElementById('c_tr').value;
+  const bl = document.getElementById('c_bl').value;
+  const br = document.getElementById('c_br').value;
+
+  if (tl === tr && tl === bl && tl === br) {
+    ctx.fillStyle = tl;
+    ctx.fillRect(0, 0, W, H);
+  } else {
+    // 4-corner gradient using bilinear interpolation via pixel manipulation
+    // Use two linear gradients layered
+    const g1 = ctx.createLinearGradient(0, 0, W, 0);
+    g1.addColorStop(0, tl);
+    g1.addColorStop(1, tr);
+    ctx.fillStyle = g1;
+    ctx.fillRect(0, 0, W, H/2);
+
+    const g2 = ctx.createLinearGradient(0, 0, W, 0);
+    g2.addColorStop(0, bl);
+    g2.addColorStop(1, br);
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, H/2, W, H/2);
+
+    // Blend top to bottom
+    const gVert = ctx.createLinearGradient(0, 0, 0, H);
+    gVert.addColorStop(0, tl + '00');
+    gVert.addColorStop(1, bl);
+    ctx.fillStyle = gVert;
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(0, 0, W/2, H);
+    ctx.globalAlpha = 1;
+
+    // Better 4-corner: draw as mesh
+    ctx.clearRect(0,0,W,H);
+    drawMeshGradient(ctx, W, H, hexToRgb(tl), hexToRgb(tr), hexToRgb(bl), hexToRgb(br));
+  }
+}
+
+function drawMeshGradient(ctx, W, H, c00, c10, c01, c11) {
+  const steps = 40;
+  const sw = W / steps;
+  const sh = H / steps;
+  for (let y = 0; y < steps; y++) {
+    for (let x = 0; x < steps; x++) {
+      const tx = x / (steps - 1);
+      const ty = y / (steps - 1);
+      const r = bilinear(c00.r, c10.r, c01.r, c11.r, tx, ty);
+      const g = bilinear(c00.g, c10.g, c01.g, c11.g, tx, ty);
+      const b = bilinear(c00.b, c10.b, c01.b, c11.b, tx, ty);
+      ctx.fillStyle = `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+      ctx.fillRect(x * sw, y * sh, sw + 1, sh + 1);
+    }
+  }
+}
+
+function bilinear(v00, v10, v01, v11, tx, ty) {
+  return v00*(1-tx)*(1-ty) + v10*tx*(1-ty) + v01*(1-tx)*ty + v11*tx*ty;
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return {r,g,b};
+}
+
+function drawBgImage(ctx, W, H) {
+  if (!bgImage) return;
+  const mode = document.getElementById('bgMode').value;
+  const opacity = parseInt(document.getElementById('bgImageOpacity').value) / 100;
+  ctx.globalAlpha = opacity;
+  const iw = bgImage.width, ih = bgImage.height;
+
+  ctx.save();
+  if (mode === 'cover') {
+    const scale = Math.max(W/iw, H/ih);
+    const nw = iw*scale, nh = ih*scale;
+    ctx.drawImage(bgImage, (W-nw)/2, (H-nh)/2, nw, nh);
+  } else if (mode === 'contain') {
+    const scale = Math.min(W/iw, H/ih);
+    const nw = iw*scale, nh = ih*scale;
+    ctx.drawImage(bgImage, (W-nw)/2, (H-nh)/2, nw, nh);
+  } else if (mode === 'center') {
+    ctx.drawImage(bgImage, (W-iw)/2, (H-ih)/2);
+  } else if (mode === 'stretch') {
+    ctx.drawImage(bgImage, 0, 0, W, H);
+  } else if (mode === 'repeat') {
+    const pat = ctx.createPattern(bgImage, 'repeat');
+    ctx.fillStyle = pat;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// ===================== SHAPES =====================
+function seededRng(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}
+
+function generateShapes(W, H) {
+  const rng = seededRng(currentSeed * 1e9 | 0);
+  const density = parseInt(document.getElementById('density').value);
+  const sizeMin = parseInt(document.getElementById('sizeMin').value) || 10;
+  const sizeMax = parseInt(document.getElementById('sizeMax').value) || 60;
+  const layout = getChipVal('layoutType');
+  const palette = getPalette();
+  if (!palette.length) return;
+
+  shapes = [];
+  const activeShapeTypes = getActiveShapeTypes();
+  const textContent = document.getElementById('textShapeContent').value.trim().split('\n').filter(Boolean);
+  const polygonSides = parseInt(document.getElementById('polygonSides').value) || 6;
+  const starPoints = parseInt(document.getElementById('starPoints').value) || 5;
+
+  // Helper: pick a random shape type from active list
+  function pickShapeType(rngFn) {
+    return activeShapeTypes[Math.floor(rngFn() * activeShapeTypes.length)];
+  }
+
+  const count = density;
+
+  if (layout === 'random') {
+    for (let i = 0; i < count; i++) {
+      const size = sizeMin + rng() * (sizeMax - sizeMin);
+      shapes.push({
+        x: rng() * W,
+        y: rng() * H,
+        size,
+        rot: rng() * Math.PI * 2,
+        color: palette[Math.floor(rng() * palette.length)],
+        text: textContent.length ? textContent[Math.floor(rng() * textContent.length)] : '✦',
+        polygonSides, starPoints,
+        shapeType: pickShapeType(rng)
+      });
+    }
+  } else if (layout === 'grid') {
+    const cols = Math.ceil(Math.sqrt(count * W / H));
+    const rows = Math.ceil(count / cols);
+    const cx = W / cols, cy = H / rows;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (shapes.length >= count) break;
+        const size = sizeMin + rng() * (sizeMax - sizeMin);
+        const jitter = (rng() - 0.5) * cx * 0.2;
+        shapes.push({
+          x: (c + 0.5) * cx + jitter,
+          y: (r + 0.5) * cy + jitter,
+          size,
+          rot: rng() * Math.PI * 2,
+          color: palette[Math.floor(rng() * palette.length)],
+          text: textContent.length ? textContent[Math.floor(rng() * textContent.length)] : '✦',
+          polygonSides, starPoints,
+          shapeType: pickShapeType(rng)
+        });
+      }
+    }
+  } else if (layout === 'diagonal') {
+    for (let i = 0; i < count; i++) {
+      const t = i / count;
+      const size = sizeMin + rng() * (sizeMax - sizeMin);
+      const jitterX = (rng() - 0.5) * W * 0.3;
+      const jitterY = (rng() - 0.5) * H * 0.3;
+      shapes.push({
+        x: (t * W * 1.2 - W * 0.1) + jitterX,
+        y: (t * H * 1.2 - H * 0.1) + jitterY,
+        size,
+        rot: rng() * Math.PI * 2,
+        color: palette[Math.floor(rng() * palette.length)],
+        text: textContent.length ? textContent[Math.floor(rng() * textContent.length)] : '✦',
+        polygonSides, starPoints,
+        shapeType: pickShapeType(rng)
+      });
+    }
+  }
+}
+
+function drawShapes(ctx, W, H) {
+  const fillMode = getChipVal('fillMode');
+  const neon = document.getElementById('neonGlow').checked;
+  const randomOp = document.getElementById('randomOpacity').checked;
+  const fixedOp = parseInt(document.getElementById('fixedOpacity').value) / 100;
+  const strokeW = parseInt(document.getElementById('strokeWidth').value) || 2;
+  const dashGap = parseInt(document.getElementById('dashGap').value) || 0;
+  const randomRot = document.getElementById('randomRotation').checked;
+
+  shapes.forEach((s, i) => {
+    const alpha = randomOp ? (0.2 + Math.random() * 0.8) : fixedOp;
+    const rot = randomRot ? s.rot : 0;
+
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(rot);
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = strokeW;
+    if (dashGap > 0) ctx.setLineDash([dashGap, dashGap]);
+    else ctx.setLineDash([]);
+
+    if (neon) {
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = s.size * 0.6;
+    }
+
+    ctx.beginPath();
+    if (s.shapeType === 'circle') {
+      ctx.arc(0, 0, s.size/2, 0, Math.PI*2);
+    } else if (s.shapeType === 'star') {
+      drawStar(ctx, 0, 0, s.size/2, s.size/4, s.starPoints);
+    } else if (s.shapeType === 'polygon') {
+      drawPolygon(ctx, 0, 0, s.size/2, s.polygonSides);
+    } else if (s.shapeType === 'heart') {
+      drawHeart(ctx, 0, 0, s.size/2);
+    } else if (s.shapeType === 'cross') {
+      drawCross(ctx, 0, 0, s.size/2);
+    } else if (s.shapeType === 'text') {
+      ctx.font = `${s.size}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (fillMode === 'stroke') {
+        ctx.strokeStyle = s.color;
+        ctx.strokeText(s.text, 0, 0);
+      } else {
+        ctx.fillStyle = s.color;
+        ctx.fillText(s.text, 0, 0);
+      }
+      ctx.restore();
+      return;
+    }
+
+    if (fillMode === 'fill' || fillMode === 'both') {
+      ctx.fillStyle = s.color;
+      ctx.fill();
+    }
+    if (fillMode === 'stroke' || fillMode === 'both') {
+      ctx.strokeStyle = s.color;
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+}
+
+function drawPolygon(ctx, x, y, r, sides) {
+  for (let i = 0; i < sides; i++) {
+    const a = (i / sides) * Math.PI * 2 - Math.PI / 2;
+    i === 0 ? ctx.moveTo(x + Math.cos(a)*r, y + Math.sin(a)*r)
+             : ctx.lineTo(x + Math.cos(a)*r, y + Math.sin(a)*r);
+  }
+  ctx.closePath();
+}
+
+function drawStar(ctx, x, y, outerR, innerR, points) {
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+    i === 0 ? ctx.moveTo(x + Math.cos(a)*r, y + Math.sin(a)*r)
+             : ctx.lineTo(x + Math.cos(a)*r, y + Math.sin(a)*r);
+  }
+  ctx.closePath();
+}
+
+function drawHeart(ctx, x, y, r) {
+  ctx.moveTo(x, y + r * 0.3);
+  ctx.bezierCurveTo(x, y - r*0.3, x - r, y - r*0.3, x - r, y + r*0.1);
+  ctx.bezierCurveTo(x - r, y + r*0.6, x, y + r*0.9, x, y + r);
+  ctx.bezierCurveTo(x, y + r*0.9, x + r, y + r*0.6, x + r, y + r*0.1);
+  ctx.bezierCurveTo(x + r, y - r*0.3, x, y - r*0.3, x, y + r*0.3);
+  ctx.closePath();
+}
+
+function drawCross(ctx, x, y, r) {
+  const t = r * 0.3;
+  ctx.moveTo(x - t, y - r);
+  ctx.lineTo(x + t, y - r);
+  ctx.lineTo(x + t, y - t);
+  ctx.lineTo(x + r, y - t);
+  ctx.lineTo(x + r, y + t);
+  ctx.lineTo(x + t, y + t);
+  ctx.lineTo(x + t, y + r);
+  ctx.lineTo(x - t, y + r);
+  ctx.lineTo(x - t, y + t);
+  ctx.lineTo(x - r, y + t);
+  ctx.lineTo(x - r, y - t);
+  ctx.lineTo(x - t, y - t);
+  ctx.closePath();
+}
+
+// ===================== ACTIONS =====================
+function reRandomShapes() {
+  currentSeed = Math.random();
+  render();
+}
+
+function fullRandom() {
+  currentSeed = Math.random();
+  // Random background colors
+  ['c_tl','c_tr','c_bl','c_br'].forEach(id => {
+    document.getElementById(id).value = randomHex();
+  });
+  // Random preset palette
+  const p = presetPaletteData[Math.floor(Math.random() * presetPaletteData.length)];
+  applyPresetPalette(p.colors);
+
+  // Random shape types — pick 1 to 3 randomly
+  const allShapeTypes = ['circle','star','polygon','heart','cross','text'];
+  const shuffled = allShapeTypes.sort(() => Math.random() - 0.5);
+  const pickCount = 1 + Math.floor(Math.random() * 3); // 1~3
+  const chosen = new Set(shuffled.slice(0, pickCount));
+  document.querySelectorAll('#shapeType .chip').forEach(c => {
+    c.classList.toggle('active', chosen.has(c.dataset.val));
+  });
+  updateShapeTypeUI();
+
+  // Random params
+  document.getElementById('density').value = 20 + Math.floor(Math.random() * 150);
+  document.getElementById('sizeMin').value = 5 + Math.floor(Math.random() * 30);
+  document.getElementById('sizeMax').value = 40 + Math.floor(Math.random() * 120);
+  document.getElementById('neonGlow').checked = Math.random() > 0.6;
+  document.getElementById('randomOpacity').checked = Math.random() > 0.5;
+
+  const fillModes = ['fill','stroke','both'];
+  const fm = fillModes[Math.floor(Math.random() * fillModes.length)];
+  document.querySelectorAll('#fillMode .chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.val === fm);
+  });
+
+  const layouts = ['random','grid','diagonal'];
+  const ly = layouts[Math.floor(Math.random() * layouts.length)];
+  document.querySelectorAll('#layoutType .chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.val === ly);
+  });
+
+  // Update displayed values
+  updateVal(document.getElementById('density'), 'densityVal');
+  toggleOpacityMode();
+  render();
+}
+
+function randomHex() {
+  return '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6,'0');
+}
+
+function downloadWallpaper() {
+  // Render full res to offscreen canvas
+  const W = parseInt(document.getElementById('canvasW').value) || 1920;
+  const H = parseInt(document.getElementById('canvasH').value) || 1080;
+  const offscreen = document.createElement('canvas');
+  offscreen.width = W;
+  offscreen.height = H;
+  const ctx = offscreen.getContext('2d');
+  drawBackground(ctx, W, H);
+  drawBgImage(ctx, W, H);
+  generateShapes(W, H);
+  drawShapes(ctx, W, H);
+
+  const link = document.createElement('a');
+  link.download = `wallcraft_${W}x${H}.png`;
+  link.href = offscreen.toDataURL('image/png');
+  link.click();
+}
+
+// ===================== LAYOUT TOGGLE =====================
+let isBottomLayout = false;
+
+function toggleLayout() {
+  isBottomLayout = !isBottomLayout;
+  applyLayout();
+  debouncedRender();
+}
+
+function applyLayout() {
+  const layout = document.getElementById('mainLayout');
+  const btn = document.getElementById('layoutToggleBtn');
+  const label = document.getElementById('layoutLabel');
+  const icon = document.getElementById('layoutIcon');
+
+  if (isBottomLayout) {
+    layout.classList.add('layout-bottom');
+    label.textContent = '右移預覽';
+    // Switch icon to bottom-layout representation
+    icon.innerHTML = `
+      <rect x="2" y="2" width="16" height="8" rx="1.5"/>
+      <rect x="2" y="12" width="16" height="6" rx="1.5"/>
+    `;
+    // In bottom mode: preview on top, sidebar below
+    document.getElementById('previewAreaEl').style.order = '1';
+    document.getElementById('sidebarEl').style.order = '2';
+  } else {
+    layout.classList.remove('layout-bottom');
+    label.textContent = '下移預覽';
+    icon.innerHTML = `
+      <rect x="2" y="3" width="6" height="14" rx="1.5"/>
+      <rect x="10" y="3" width="8" height="14" rx="1.5"/>
+    `;
+    document.getElementById('previewAreaEl').style.order = '';
+    document.getElementById('sidebarEl').style.order = '';
+  }
+}
+
+// ===================== BOOT =====================
+initPalette();
+document.getElementById('presetRes').value = '1920x1080';
+
+// Auto bottom layout on narrow screens (mobile/tablet)
+if (window.innerWidth < 768) {
+  isBottomLayout = true;
+  applyLayout();
+}
+
+render();
+
+// Resize observer
+new ResizeObserver(() => { debouncedRender(); }).observe(document.querySelector('.preview-wrap'));
+</script>
+</body>
+</html>
