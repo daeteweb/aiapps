@@ -78,6 +78,34 @@
     border-color: var(--ink);
   }
 
+  /* Extra toggle row */
+  .extra-btns {
+    display: flex;
+    gap: 8px;
+  }
+
+  .extra-btn {
+    flex: 1;
+    padding: 9px 6px;
+    border: 1.5px solid var(--border);
+    background: var(--paper2);
+    color: var(--muted);
+    font-family: 'Noto Serif JP', serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  .extra-btn.active {
+    background: var(--red);
+    color: #fff;
+    border-color: var(--red);
+  }
+
   /* Card */
   .card {
     background: white;
@@ -285,6 +313,11 @@
     <button class="mode-btn" onclick="setMode('mix')">混合<br>Mix</button>
   </div>
 
+  <div class="extra-btns">
+    <button class="extra-btn" id="btn-daku" onclick="toggleExtra('daku')">濁音・半濁音<br>が／ぱ行</button>
+    <button class="extra-btn" id="btn-you" onclick="toggleExtra('you')">拗音<br>きゃ／にゅ行</button>
+  </div>
+
   <div class="card">
     <div class="round-badge" id="round-badge">第 1 輪</div>
     <div class="progress-info" id="progress-info">1 / 46</div>
@@ -311,6 +344,7 @@
 </div>
 
 <script>
+// ── 清音（五十音）────────────────────────────────────────────────────────────
 const hiragana = [
   {char:'あ',rom:'a'},{char:'い',rom:'i'},{char:'う',rom:'u'},{char:'え',rom:'e'},{char:'お',rom:'o'},
   {char:'か',rom:'ka'},{char:'き',rom:'ki'},{char:'く',rom:'ku'},{char:'け',rom:'ke'},{char:'こ',rom:'ko'},
@@ -337,20 +371,87 @@ const katakana = [
   {char:'ワ',rom:'wa'},{char:'ヲ',rom:'wo'},{char:'ン',rom:'n'},
 ];
 
-// Alternate accepted readings
+// ── 濁音・半濁音 ─────────────────────────────────────────────────────────────
+const hiragana_daku = [
+  // が行
+  {char:'が',rom:'ga'},{char:'ぎ',rom:'gi'},{char:'ぐ',rom:'gu'},{char:'げ',rom:'ge'},{char:'ご',rom:'go'},
+  // ざ行
+  {char:'ざ',rom:'za'},{char:'じ',rom:'ji'},{char:'ず',rom:'zu'},{char:'ぜ',rom:'ze'},{char:'ぞ',rom:'zo'},
+  // だ行
+  {char:'だ',rom:'da'},{char:'ぢ',rom:'ji'},{char:'づ',rom:'zu'},{char:'で',rom:'de'},{char:'ど',rom:'do'},
+  // ば行
+  {char:'ば',rom:'ba'},{char:'び',rom:'bi'},{char:'ぶ',rom:'bu'},{char:'べ',rom:'be'},{char:'ぼ',rom:'bo'},
+  // ぱ行（半濁音）
+  {char:'ぱ',rom:'pa'},{char:'ぴ',rom:'pi'},{char:'ぷ',rom:'pu'},{char:'ぺ',rom:'pe'},{char:'ぽ',rom:'po'},
+];
+
+const katakana_daku = [
+  {char:'ガ',rom:'ga'},{char:'ギ',rom:'gi'},{char:'グ',rom:'gu'},{char:'ゲ',rom:'ge'},{char:'ゴ',rom:'go'},
+  {char:'ザ',rom:'za'},{char:'ジ',rom:'ji'},{char:'ズ',rom:'zu'},{char:'ゼ',rom:'ze'},{char:'ゾ',rom:'zo'},
+  {char:'ダ',rom:'da'},{char:'ヂ',rom:'ji'},{char:'ヅ',rom:'zu'},{char:'デ',rom:'de'},{char:'ド',rom:'do'},
+  {char:'バ',rom:'ba'},{char:'ビ',rom:'bi'},{char:'ブ',rom:'bu'},{char:'ベ',rom:'be'},{char:'ボ',rom:'bo'},
+  {char:'パ',rom:'pa'},{char:'ピ',rom:'pi'},{char:'プ',rom:'pu'},{char:'ペ',rom:'pe'},{char:'ポ',rom:'po'},
+];
+
+// ── 拗音 ──────────────────────────────────────────────────────────────────────
+const hiragana_you = [
+  // きゃ行
+  {char:'きゃ',rom:'kya'},{char:'きゅ',rom:'kyu'},{char:'きょ',rom:'kyo'},
+  // しゃ行
+  {char:'しゃ',rom:'sha'},{char:'しゅ',rom:'shu'},{char:'しょ',rom:'sho'},
+  // ちゃ行
+  {char:'ちゃ',rom:'cha'},{char:'ちゅ',rom:'chu'},{char:'ちょ',rom:'cho'},
+  // にゃ行
+  {char:'にゃ',rom:'nya'},{char:'にゅ',rom:'nyu'},{char:'にょ',rom:'nyo'},
+  // ひゃ行
+  {char:'ひゃ',rom:'hya'},{char:'ひゅ',rom:'hyu'},{char:'ひょ',rom:'hyo'},
+  // みゃ行
+  {char:'みゃ',rom:'mya'},{char:'みゅ',rom:'myu'},{char:'みょ',rom:'myo'},
+  // りゃ行
+  {char:'りゃ',rom:'rya'},{char:'りゅ',rom:'ryu'},{char:'りょ',rom:'ryo'},
+  // ぎゃ行（濁音拗音）
+  {char:'ぎゃ',rom:'gya'},{char:'ぎゅ',rom:'gyu'},{char:'ぎょ',rom:'gyo'},
+  // じゃ行
+  {char:'じゃ',rom:'ja'},{char:'じゅ',rom:'ju'},{char:'じょ',rom:'jo'},
+  // びゃ行
+  {char:'びゃ',rom:'bya'},{char:'びゅ',rom:'byu'},{char:'びょ',rom:'byo'},
+  // ぴゃ行
+  {char:'ぴゃ',rom:'pya'},{char:'ぴゅ',rom:'pyu'},{char:'ぴょ',rom:'pyo'},
+];
+
+const katakana_you = [
+  {char:'キャ',rom:'kya'},{char:'キュ',rom:'kyu'},{char:'キョ',rom:'kyo'},
+  {char:'シャ',rom:'sha'},{char:'シュ',rom:'shu'},{char:'ショ',rom:'sho'},
+  {char:'チャ',rom:'cha'},{char:'チュ',rom:'chu'},{char:'チョ',rom:'cho'},
+  {char:'ニャ',rom:'nya'},{char:'ニュ',rom:'nyu'},{char:'ニョ',rom:'nyo'},
+  {char:'ヒャ',rom:'hya'},{char:'ヒュ',rom:'hyu'},{char:'ヒョ',rom:'hyo'},
+  {char:'ミャ',rom:'mya'},{char:'ミュ',rom:'myu'},{char:'ミョ',rom:'myo'},
+  {char:'リャ',rom:'rya'},{char:'リュ',rom:'ryu'},{char:'リョ',rom:'ryo'},
+  {char:'ギャ',rom:'gya'},{char:'ギュ',rom:'gyu'},{char:'ギョ',rom:'gyo'},
+  {char:'ジャ',rom:'ja'},{char:'ジュ',rom:'ju'},{char:'ジョ',rom:'jo'},
+  {char:'ビャ',rom:'bya'},{char:'ビュ',rom:'byu'},{char:'ビョ',rom:'byo'},
+  {char:'ピャ',rom:'pya'},{char:'ピュ',rom:'pyu'},{char:'ピョ',rom:'pyo'},
+];
+
+// ── 容錯拼音 ──────────────────────────────────────────────────────────────────
 const altRom = {
-  'shi': ['si'], 'chi': ['ti'], 'tsu': ['tu'], 'fu': ['hu'],
-  'ja': ['zya'], 'ji': ['zi','di'], 'ju': ['zyu'], 'wo': ['o'],
-  'n': ['nn','m'],
+  'shi':['si'], 'chi':['ti'], 'tsu':['tu'], 'fu':['hu'],
+  'ji':['zi','di'], 'zu':['du'],
+  'sha':['sya'], 'shu':['syu'], 'sho':['syo'],
+  'cha':['tya','cya'], 'chu':['tyu','cyu'], 'cho':['tyo','cyo'],
+  'ja':['zya','jya'], 'ju':['zyu','jyu'], 'jo':['zyo','jyo'],
+  'wo':['o'], 'n':['nn','m'],
 };
 
-// Build reverse lookup for alt
 const altLookup = {};
 for (const [main, alts] of Object.entries(altRom)) {
   for (const a of alts) altLookup[a] = main;
 }
 
+// ── 狀態 ──────────────────────────────────────────────────────────────────────
 let mode = 'hira';
+let extraDaku = false;
+let extraYou  = false;
 let pool = [];
 let bag = [];
 let current = null;
@@ -359,11 +460,31 @@ let statsCorrect = 0;
 let statsWrong = 0;
 let answered = false;
 
-function getPool() {
-  if (mode === 'hira') return hiragana;
-  if (mode === 'kata') return katakana;
-  // mix: pair each hira with its kata equivalent
+// ── 建立題庫 ──────────────────────────────────────────────────────────────────
+function buildBasePool() {
+  if (mode === 'hira') return [...hiragana];
+  if (mode === 'kata') return [...katakana];
+  // mix: 每個位置隨機選平假名或片假名
   return hiragana.map((h, i) => Math.random() < 0.5 ? h : katakana[i]);
+}
+
+function buildDakuPool() {
+  if (mode === 'hira') return [...hiragana_daku];
+  if (mode === 'kata') return [...katakana_daku];
+  return hiragana_daku.map((h, i) => Math.random() < 0.5 ? h : katakana_daku[i]);
+}
+
+function buildYouPool() {
+  if (mode === 'hira') return [...hiragana_you];
+  if (mode === 'kata') return [...katakana_you];
+  return hiragana_you.map((h, i) => Math.random() < 0.5 ? h : katakana_you[i]);
+}
+
+function getPool() {
+  let p = buildBasePool();
+  if (extraDaku) p = p.concat(buildDakuPool());
+  if (extraYou)  p = p.concat(buildYouPool());
+  return p;
 }
 
 function shuffle(arr) {
@@ -382,11 +503,27 @@ function refillBag() {
   document.getElementById('round-badge').textContent = `第 ${round} 輪`;
 }
 
+// ── 切換模式 ──────────────────────────────────────────────────────────────────
 function setMode(m) {
   mode = m;
   document.querySelectorAll('.mode-btn').forEach((b, i) => {
     b.classList.toggle('active', ['hira','kata','mix'][i] === m);
   });
+  resetSession();
+}
+
+function toggleExtra(type) {
+  if (type === 'daku') {
+    extraDaku = !extraDaku;
+    document.getElementById('btn-daku').classList.toggle('active', extraDaku);
+  } else {
+    extraYou = !extraYou;
+    document.getElementById('btn-you').classList.toggle('active', extraYou);
+  }
+  resetSession();
+}
+
+function resetSession() {
   round = 0;
   statsCorrect = 0;
   statsWrong = 0;
@@ -398,12 +535,15 @@ function setMode(m) {
   nextQuestion();
 }
 
+// ── 出題 ──────────────────────────────────────────────────────────────────────
 function nextQuestion() {
   if (bag.length === 0) refillBag();
   current = bag.pop();
   answered = false;
 
   const el = document.getElementById('kana-char');
+  // 拗音字比較長，縮小一點
+  el.style.fontSize = current.char.length >= 2 ? 'clamp(52px, 16vw, 80px)' : '';
   el.textContent = current.char;
   el.classList.remove('pop');
   void el.offsetWidth;
@@ -418,7 +558,6 @@ function nextQuestion() {
   input.className = '';
   input.disabled = false;
   hideResult();
-  // Focus input to keep keyboard up
   setTimeout(() => input.focus(), 50);
 }
 
@@ -438,7 +577,7 @@ function checkAnswer() {
   const isCorrect = user === correct;
 
   answered = true;
-  input.disabled = false; // keep enabled for next enter
+  input.disabled = false;
 
   if (isCorrect) {
     statsCorrect++;
@@ -452,25 +591,20 @@ function checkAnswer() {
     showResult(false, current.char, current.rom);
   }
 
-  // Re-focus so keyboard stays and next Enter works
   setTimeout(() => input.focus(), 30);
 }
 
 function showResult(correct, char, rom) {
   const box = document.getElementById('result-box');
-  const verdict = document.getElementById('result-verdict');
-  const answer = document.getElementById('result-answer');
-
   box.className = 'result-box ' + (correct ? 'correct' : 'wrong');
-  verdict.textContent = correct ? '✓ 正確！' : '✗ 答錯了';
-  answer.textContent = `${char} 的讀音是：${rom}`;
+  document.getElementById('result-verdict').textContent = correct ? '✓ 正確！' : '✗ 答錯了';
+  document.getElementById('result-answer').textContent = `${char} 的讀音是：${rom}`;
 }
 
 function hideResult() {
   document.getElementById('result-box').className = 'result-box';
 }
 
-// Enter key handling
 document.getElementById('answer-input').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') {
     e.preventDefault();
@@ -479,9 +613,11 @@ document.getElementById('answer-input').addEventListener('keydown', function(e) 
   }
 });
 
-// Hint table
+// ── 參考表 ────────────────────────────────────────────────────────────────────
 function buildHintRow() {
   const hr = document.getElementById('hint-row');
+  hr.innerHTML = '';
+  // 清音
   hiragana.forEach((h, i) => {
     const k = katakana[i];
     const span = document.createElement('span');
@@ -489,15 +625,44 @@ function buildHintRow() {
     span.innerHTML = `${h.char}${k.char}<br>${h.rom}`;
     hr.appendChild(span);
   });
+  // 濁音・半濁音
+  if (extraDaku) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'width:100%;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;margin:4px 0 2px;';
+    sep.textContent = '── 濁音・半濁音 ──';
+    hr.appendChild(sep);
+    hiragana_daku.forEach((h, i) => {
+      const k = katakana_daku[i];
+      const span = document.createElement('span');
+      span.style.cssText = 'font-family:Noto Serif JP,serif;font-size:0.68rem;color:var(--red);padding:2px 4px;border:1px solid var(--border);border-radius:2px;line-height:1.4;text-align:center;';
+      span.innerHTML = `${h.char}${k.char}<br>${h.rom}`;
+      hr.appendChild(span);
+    });
+  }
+  // 拗音
+  if (extraYou) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'width:100%;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;margin:4px 0 2px;';
+    sep.textContent = '── 拗音 ──';
+    hr.appendChild(sep);
+    hiragana_you.forEach((h, i) => {
+      const k = katakana_you[i];
+      const span = document.createElement('span');
+      span.style.cssText = 'font-family:Noto Serif JP,serif;font-size:0.65rem;color:var(--gold);padding:2px 4px;border:1px solid var(--border);border-radius:2px;line-height:1.4;text-align:center;';
+      span.innerHTML = `${h.char}<br>${k.char}<br>${h.rom}`;
+      hr.appendChild(span);
+    });
+  }
 }
 
 function toggleHint() {
   const hr = document.getElementById('hint-row');
-  hr.classList.toggle('visible');
+  const willOpen = !hr.classList.contains('visible');
+  if (willOpen) buildHintRow();
+  hr.classList.toggle('visible', willOpen);
 }
 
 // Init
-buildHintRow();
 bag = [];
 round = 0;
 nextQuestion();
