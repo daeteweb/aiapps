@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#000000">
+<title>π noise</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg: #000;
+    --yellow: #FFD700;
+    --amber: #FFA500;
+    --red: #FF2222;
+    --dim: #333;
+    --mid: #888;
+    --glow: rgba(255,215,0,0.15);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--yellow);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* MARQUEE WARNING */
+  #marquee-bar {
+    height: 28px;
+    background: var(--red);
+    color: #fff;
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.5s;
+    flex-shrink: 0;
+  }
+  #marquee-bar.visible { opacity: 1; }
+  #marquee-inner {
+    white-space: nowrap;
+    animation: marquee 12s linear infinite;
+  }
+  @keyframes marquee {
+    0% { transform: translateX(100vw); }
+    100% { transform: translateX(-100%); }
+  }
+
+  /* MAIN DISPLAY */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+  }
+
+  #pi-symbol {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(16px, 4vw, 22px);
+    color: var(--mid);
+    letter-spacing: 6px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+
+  #current-digit {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(80px, 20vw, 160px);
+    font-weight: 900;
+    color: var(--yellow);
+    text-shadow: 0 0 40px var(--yellow), 0 0 80px rgba(255,215,0,0.4);
+    line-height: 1;
+    transition: transform 0.08s ease;
+    min-width: 1ch;
+    text-align: center;
+  }
+  #current-digit.pulse {
+    transform: scale(1.15);
+    text-shadow: 0 0 60px var(--yellow), 0 0 120px rgba(255,215,0,0.6);
+  }
+
+  #digit-counter {
+    font-size: 11px;
+    color: var(--mid);
+    letter-spacing: 3px;
+    margin-top: 8px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* SCROLL STREAM */
+  #stream-container {
+    width: 100%;
+    max-width: 640px;
+    margin-top: 20px;
+    height: 36px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #stream {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 18px;
+    white-space: nowrap;
+    letter-spacing: 4px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+  .stream-digit { transition: color 0.1s; color: var(--dim); }
+  .stream-digit.active { color: var(--yellow); }
+  .stream-digit.recent { color: var(--amber); }
+  .stream-digit.future { color: #222; }
+  .stream-sep {
+    color: #1a1a1a;
+    margin: 0 6px;
+    font-size: 14px;
+  }
+
+  /* MODE BADGE */
+  #mode-badge {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    font-size: 9px;
+    letter-spacing: 2px;
+    padding: 3px 8px;
+    border: 1px solid var(--dim);
+    color: var(--mid);
+  }
+  #mode-badge.low { border-color: var(--amber); color: var(--amber); }
+
+  /* LANGUAGE SYNC OVERLAY */
+  #lang-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  #lang-overlay.visible { opacity: 1; pointer-events: all; }
+  #lang-overlay p {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    margin-bottom: 20px;
+    color: var(--yellow);
+  }
+  #lang-progress-bar {
+    width: 260px;
+    height: 2px;
+    background: var(--dim);
+    overflow: hidden;
+  }
+  #lang-progress-fill {
+    height: 100%;
+    background: var(--yellow);
+    width: 0%;
+    transition: width 5s linear;
+  }
+
+  /* CONTROLS */
+  #controls {
+    background: #050505;
+    border-top: 1px solid #1a1a1a;
+    padding: 14px 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .ctrl-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--mid);
+    min-width: 52px;
+    text-transform: uppercase;
+  }
+
+  /* PLAY BUTTON */
+  #play-btn {
+    width: 48px;
+    height: 48px;
+    border: 2px solid var(--yellow);
+    background: transparent;
+    color: var(--yellow);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, box-shadow 0.2s;
+    flex-shrink: 0;
+  }
+  #play-btn:hover { background: var(--glow); box-shadow: 0 0 16px var(--glow); }
+  #play-btn.playing { border-color: var(--amber); color: var(--amber); }
+
+  /* RATE STEPPER */
+  .rate-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+  .rate-step-btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 16px;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--dim);
+    background: transparent;
+    color: var(--mid);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.2s, color 0.2s;
+    flex-shrink: 0;
+  }
+  .rate-step-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+  .rate-step-btn:disabled { opacity: 0.3; cursor: default; }
+  #rate-val {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    color: var(--yellow);
+    width: 48px;
+    text-align: center;
+    border-top: 1px solid var(--dim);
+    border-bottom: 1px solid var(--dim);
+    height: 32px;
+    line-height: 32px;
+    letter-spacing: 1px;
+  }
+
+  /* SMALL BUTTONS */
+  .small-btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    padding: 5px 10px;
+    border: 1px solid var(--dim);
+    background: transparent;
+    color: var(--mid);
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    text-transform: uppercase;
+  }
+  .small-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+  .small-btn.active { border-color: var(--yellow); color: var(--yellow); }
+  .small-btn.warn { border-color: var(--amber); color: var(--amber); }
+
+  /* SELECT */
+  select.small-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 20px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+  }
+  select.small-btn option { background: #111; }
+
+  /* TIMER DISPLAY */
+  #timer-display {
+    font-size: 12px;
+    color: var(--amber);
+    letter-spacing: 2px;
+    min-width: 60px;
+  }
+
+  /* MODE SWITCH WARNING */
+  #mode-warn-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    padding: 40px;
+    text-align: center;
+  }
+  #mode-warn-overlay.visible { opacity: 1; pointer-events: all; }
+  #mode-warn-overlay h2 {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    letter-spacing: 3px;
+    color: var(--amber);
+    margin-bottom: 20px;
+  }
+  #mode-warn-overlay p {
+    font-size: 13px;
+    color: var(--mid);
+    line-height: 1.8;
+    max-width: 380px;
+    margin-bottom: 30px;
+  }
+  .warn-btns { display: flex; gap: 16px; }
+
+  /* SESSION END */
+  #session-end {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1s;
+  }
+  #session-end.visible { opacity: 1; pointer-events: all; }
+  #session-end h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(16px, 4vw, 22px);
+    letter-spacing: 6px;
+    color: var(--dim);
+  }
+  #session-end p {
+    font-size: 11px;
+    color: #222;
+    letter-spacing: 3px;
+    margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+
+<!-- WARNING MARQUEE -->
+<div id="marquee-bar">
+  <span id="marquee-inner">⚠ PRECISION UNGUARANTEED &nbsp;&nbsp;&nbsp; COMPUTATIONAL BUFFER EXCEEDED &nbsp;&nbsp;&nbsp; STREAM INTEGRITY DEGRADED &nbsp;&nbsp;&nbsp; ⚠ PRECISION UNGUARANTEED &nbsp;&nbsp;&nbsp; COMPUTATIONAL BUFFER EXCEEDED &nbsp;&nbsp;&nbsp; STREAM INTEGRITY DEGRADED &nbsp;&nbsp;&nbsp;</span>
+</div>
+
+<!-- MAIN DISPLAY -->
+<div id="main">
+  <div id="mode-badge">HIGH PRECISION</div>
+  <div id="pi-symbol">π noise</div>
+  <div id="current-digit">3</div>
+  <div id="digit-counter">DIGIT 0</div>
+  <div id="stream-container">
+    <div id="stream"></div>
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div id="controls">
+  <!-- Row 1: Play + Rate -->
+  <div class="ctrl-row">
+    <button id="play-btn" title="Play / Pause">▶</button>
+    <span class="ctrl-label">RATE</span>
+    <div class="rate-stepper">
+      <button class="rate-step-btn" id="rate-minus">−</button>
+      <span id="rate-val">1.0×</span>
+      <button class="rate-step-btn" id="rate-plus">+</button>
+    </div>
+  </div>
+
+  <!-- Row 2: Language + Music + Mode -->
+  <div class="ctrl-row">
+    <span class="ctrl-label">LANG</span>
+    <select id="lang-select" class="small-btn">
+      <option value="zh-TW">國語</option>
+      <option value="en-US">English</option>
+      <option value="ja-JP">日本語</option>
+    </select>
+    <button id="music-btn" class="small-btn">🎵 ON</button>
+    <button id="mode-btn" class="small-btn warn">LOW POWER</button>
+  </div>
+
+  <!-- Row 3: Sleep Timer -->
+  <div class="ctrl-row">
+    <span class="ctrl-label">SLEEP</span>
+    <button class="small-btn timer-btn" data-min="0">OFF</button>
+    <button class="small-btn timer-btn" data-min="15">15m</button>
+    <button class="small-btn timer-btn" data-min="30">30m</button>
+    <button class="small-btn timer-btn" data-min="60">60m</button>
+    <button class="small-btn timer-btn" data-min="120">2h</button>
+    <span id="timer-display"></span>
+  </div>
+</div>
+
+<!-- OVERLAYS -->
+<div id="lang-overlay">
+  <p id="lang-overlay-text">SYNCING ZH-TW DATA PACK...</p>
+  <div id="lang-progress-bar"><div id="lang-progress-fill"></div></div>
+</div>
+
+<div id="mode-warn-overlay">
+  <h2>⚠ SYSTEM WARNING</h2>
+  <p>當前數據流將進入「噪聲擴散」狀態。<br>系統將優化電力分配以維持無限期的讀取。<br><br>此操作<strong style="color:#FFD700">不可逆</strong>，確認後數據流將永久轉換。<br>是否確認切換？</p>
+  <div class="warn-btns">
+    <button class="small-btn" id="warn-cancel">取消</button>
+    <button class="small-btn warn" id="warn-confirm">確認切換</button>
+  </div>
+</div>
+
+<div id="session-end">
+  <h1>SESSION ENDED</h1>
+  <p>π continues beyond perception</p>
+</div>
+
+<script>
+// ── π DATA (first 5000 digits after decimal) ──────────────────────────────
+const PI_STR = "31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679821480865132823066470938446095505822317253594081284811174502841027019385211055596446229489549303819644288109756659334461284756482337867831652712019091456485669234603486104543266482133936072602491412737245870066063155881748815209209628292540917153643678925903600113305305488204665213841469519415116094330572703657595919530921861173819326117931051185480744623799627495673518857527248912279381830119491298336733624406566430860213949463952247371907021798609437027705392171762931767523846748184676694051320005681271452635608277857713427577896091736371787214684409012249534301465495853710507922796892589235420199561121290219608640344181598136297747713099605187072113499999983729780499510597317328160963185950244594553469083026425223082533446850352619311881710100031378387528865875332083814206171776691473035982534904287554687311595628638823537875937519577818577805321712268066130019278766111959092164201989380952572010654858632788659361533818279682303019520353018529689957736225994138912497217752834791315155748572424541506959508295331168617278558890750983817546374649393192550604009277016711390098488240128583616035637076601047101819429555961989467678374494482553797747268471040475346462080466842590694912933136770289891521047521620569660240580381501935112533824300355876402474964732639141992726042699227967823547816360093417216412199245863150302861829745557067498385054945885869269956909272107975093029553211653449872027559602364806654991198818347977535663698074265425278625518184175746728909777727938000816470600161452491921732172147723501414419735685481613611573525521334757418494684385233239073941433345477624168625189835694855620992192221842725502542568876717904946016534668049886272327917860857843838279679766814541009538837863609506800642251252051173929848960841284886269456042419652850222106611863067442786220391949450471237137869609563643719172874677646575739624138908658326459958133904780275901";
+
+// Digit names
+const DIGIT_NAMES = {
+  'zh-TW': ['零','一','二','三','四','五','六','七','八','九'],
+  'en-US': ['zero','one','two','three','four','five','six','seven','eight','nine'],
+  'ja-JP': ['ゼロ','いち','に','さん','し','ご','ろく','なな','はち','きゅう']
+};
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let isPlaying = false;
+let isHighPrecision = true;
+let isLowPrecision = false;
+let musicOn = true;
+let currentLang = 'zh-TW';
+let rate = 1.0;
+const RATE_MIN = 0.5, RATE_MAX = 3.0, RATE_STEP = 0.5;
+let currentIndex = 0;
+let isSpeaking = false;
+let timerMinutes = 0;
+let timerInterval = null;
+let timerRemaining = 0;
+let audioCtx = null;
+let beatInterval = null;
+let piBuffer = PI_STR;
+let voicesReady = false;
+let pendingLangSwitch = null;
+
+// ── ELEMENTS ──────────────────────────────────────────────────────────────
+const playBtn = document.getElementById('play-btn');
+const rateValEl = document.getElementById('rate-val');
+const rateMinus = document.getElementById('rate-minus');
+const ratePlus = document.getElementById('rate-plus');
+const langSelect = document.getElementById('lang-select');
+const musicBtn = document.getElementById('music-btn');
+const modeBtn = document.getElementById('mode-btn');
+const marqueeBar = document.getElementById('marquee-bar');
+const currentDigitEl = document.getElementById('current-digit');
+const digitCounter = document.getElementById('digit-counter');
+const streamEl = document.getElementById('stream');
+const langOverlay = document.getElementById('lang-overlay');
+const langOverlayText = document.getElementById('lang-overlay-text');
+const langProgressFill = document.getElementById('lang-progress-fill');
+const modeWarnOverlay = document.getElementById('mode-warn-overlay');
+const sessionEnd = document.getElementById('session-end');
+const modeBadge = document.getElementById('mode-badge');
+const timerDisplay = document.getElementById('timer-display');
+
+// ── PI DIGIT ACCESS ────────────────────────────────────────────────────────
+function getDigit(idx) {
+  if (idx < piBuffer.length) return piBuffer[idx];
+  if (!isHighPrecision) {
+    return String(Math.floor(Math.random() * 10));
+  }
+  showMarquee(true);
+  return String(Math.floor(Math.random() * 10));
+}
+
+// ── WEB WORKER ────────────────────────────────────────────────────────────
+const workerCode = `
+self.onmessage = function(e) {
+  const start = e.data.start;
+  const count = e.data.count;
+  let digits = '';
+  for (let i = start; i < start + count; i++) {
+    let seed = (i * 2654435761) >>> 0;
+    seed = (seed ^ (seed >>> 16)) >>> 0;
+    seed = (seed * 2246822519) >>> 0;
+    seed = (seed ^ (seed >>> 13)) >>> 0;
+    digits += String(seed % 10);
+  }
+  self.postMessage({ start, digits });
+};
+`;
+let worker = null;
+try {
+  const blob = new Blob([workerCode], {type:'application/javascript'});
+  worker = new Worker(URL.createObjectURL(blob));
+  worker.onmessage = function(e) {
+    const { start, digits } = e.data;
+    if (piBuffer.length <= start + digits.length) piBuffer += digits;
+  };
+  worker.postMessage({ start: PI_STR.length, count: 5000 });
+} catch(e) {}
+
+// ── AUDIO ENGINE ──────────────────────────────────────────────────────────
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playBeep(freq, duration, type='square', vol=0.07) {
+  if (!musicOn) return;
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch(e) {}
+}
+function startMusic() {
+  stopMusic();
+  if (!musicOn) return;
+  const bpm = Math.round(60 + (rate - 0.5) * 40);
+  const interval = (60 / bpm) * 1000;
+  let beat = 0;
+  beatInterval = setInterval(() => {
+    if (!musicOn) return;
+    if (rate <= 1.0) {
+      if (beat % 4 === 0) playBeep(110, 0.6, 'sine', 0.06);
+      if (beat % 4 === 2) playBeep(82, 0.4, 'sine', 0.04);
+    } else if (rate <= 2.0) {
+      if (beat % 4 === 0) playBeep(220, 0.15, 'square', 0.08);
+      if (beat % 4 === 2) playBeep(165, 0.1, 'square', 0.06);
+      if (beat % 2 === 1) playBeep(440, 0.05, 'square', 0.03);
+    } else {
+      if (beat % 2 === 0) playBeep(55, 0.12, 'sawtooth', 0.1);
+      if (beat % 4 === 1) playBeep(880, 0.08, 'square', 0.07);
+      if (beat % 8 === 3) playBeep(330, 0.06, 'square', 0.05);
+    }
+    beat++;
+  }, interval);
+}
+function stopMusic() {
+  if (beatInterval) { clearInterval(beatInterval); beatInterval = null; }
+}
+
+// ── STREAM DISPLAY ────────────────────────────────────────────────────────
+const PAST_LEN = 10;   // digits shown to the left (already spoken)
+const FUTURE_LEN = 8;  // digits shown to the right (upcoming)
+
+function updateStream() {
+  let html = '';
+  // Past digits (dim, already spoken) — left side
+  for (let i = Math.max(0, currentIndex - PAST_LEN); i < currentIndex; i++) {
+    const d = getDigit(i);
+    const age = currentIndex - i; // 1 = most recent past
+    const cls = age <= 2 ? 'stream-digit recent' : 'stream-digit';
+    html += `<span class="${cls}">${d}</span>`;
+  }
+  // Separator
+  html += `<span class="stream-sep">·</span>`;
+  // Current digit (bright yellow)
+  html += `<span class="stream-digit active">${getDigit(currentIndex)}</span>`;
+  // Separator
+  html += `<span class="stream-sep">·</span>`;
+  // Future digits (very dim) — right side
+  for (let i = currentIndex + 1; i <= currentIndex + FUTURE_LEN; i++) {
+    const d = getDigit(i);
+    html += `<span class="stream-digit future">${d}</span>`;
+  }
+  streamEl.innerHTML = html;
+}
+
+// ── VOICE SELECTION ───────────────────────────────────────────────────────
+function getBestVoice(lang) {
+  const voices = synth.getVoices();
+  // Try exact match first
+  let v = voices.find(v => v.lang === lang);
+  if (v) return v;
+  // Try prefix match (e.g. 'ja' for 'ja-JP')
+  const prefix = lang.split('-')[0];
+  v = voices.find(v => v.lang.startsWith(prefix));
+  return v || null;
+}
+
+// ── SPEECH ENGINE ─────────────────────────────────────────────────────────
+const synth = window.speechSynthesis;
+let utteranceInFlight = false;
+
+function speakDigit(digit) {
+  const names = DIGIT_NAMES[currentLang];
+  const word = names[parseInt(digit)] ?? digit;
+  const utt = new SpeechSynthesisUtterance(word);
+  utt.lang = currentLang;
+  utt.rate = rate;
+  utt.pitch = 1.0;
+  utt.volume = 1;
+
+  const voice = getBestVoice(currentLang);
+  if (voice) utt.voice = voice;
+
+  utt.onend = () => {
+    utteranceInFlight = false;
+    if (isPlaying) pumpNext();
+  };
+  utt.onerror = (e) => {
+    utteranceInFlight = false;
+    // On error, skip with minimal delay to avoid runaway loop
+    if (isPlaying) setTimeout(pumpNext, 80);
+  };
+
+  utteranceInFlight = true;
+  synth.speak(utt);
+}
+
+function pumpNext() {
+  if (!isPlaying || utteranceInFlight) return;
+
+  const d = getDigit(currentIndex);
+
+  // Update big digit with pulse
+  currentDigitEl.textContent = d;
+  currentDigitEl.classList.add('pulse');
+  setTimeout(() => currentDigitEl.classList.remove('pulse'), 120);
+
+  // Update counter
+  digitCounter.textContent = `DIGIT ${(currentIndex + 1).toLocaleString()}`;
+
+  // Update stream (shows past + current + future)
+  updateStream();
+
+  // Request more from worker when buffer is low
+  if (worker && currentIndex > piBuffer.length - 2000) {
+    worker.postMessage({ start: piBuffer.length, count: 5000 });
+    if (currentIndex >= piBuffer.length) showMarquee(true);
+    else showMarquee(false);
+  }
+
+  speakDigit(d);
+  currentIndex++;
+}
+
+function showMarquee(show) {
+  marqueeBar.classList.toggle('visible', show);
+}
+
+// ── PLAY / PAUSE ──────────────────────────────────────────────────────────
+function startPlayback() {
+  synth.cancel();
+  utteranceInFlight = false;
+  isPlaying = true;
+  playBtn.textContent = '⏸';
+  playBtn.classList.add('playing');
+  if (musicOn) startMusic();
+  // Small delay for synth to settle after cancel
+  setTimeout(pumpNext, 60);
+}
+function pausePlayback() {
+  isPlaying = false;
+  synth.cancel();
+  utteranceInFlight = false;
+  playBtn.textContent = '▶';
+  playBtn.classList.remove('playing');
+  stopMusic();
+}
+playBtn.addEventListener('click', () => {
+  if (isPlaying) pausePlayback();
+  else startPlayback();
+});
+
+// ── RATE STEPPER ──────────────────────────────────────────────────────────
+function updateRateUI() {
+  rateValEl.textContent = rate.toFixed(1) + '×';
+  rateMinus.disabled = rate <= RATE_MIN;
+  ratePlus.disabled = rate >= RATE_MAX;
+}
+function applyRate() {
+  updateRateUI();
+  if (isPlaying) {
+    synth.cancel();
+    utteranceInFlight = false;
+    stopMusic();
+    if (musicOn) startMusic();
+    setTimeout(pumpNext, 60);
+  }
+}
+rateMinus.addEventListener('click', () => {
+  if (rate > RATE_MIN) { rate = Math.round((rate - RATE_STEP) * 10) / 10; applyRate(); }
+});
+ratePlus.addEventListener('click', () => {
+  if (rate < RATE_MAX) { rate = Math.round((rate + RATE_STEP) * 10) / 10; applyRate(); }
+});
+updateRateUI();
+
+// ── LANGUAGE ──────────────────────────────────────────────────────────────
+langSelect.addEventListener('change', () => {
+  const newLang = langSelect.value;
+  if (newLang === currentLang) return;
+  const langNames = { 'zh-TW':'ZH-TW', 'en-US':'EN-US', 'ja-JP':'JA-JP' };
+  langOverlayText.textContent = `SYNCING ${langNames[newLang]} DATA PACK...`;
+  langProgressFill.style.transition = 'none';
+  langProgressFill.style.width = '0%';
+  langOverlay.classList.add('visible');
+  // Pause speech while switching
+  if (isPlaying) { synth.cancel(); utteranceInFlight = false; }
+  requestAnimationFrame(() => {
+    langProgressFill.style.transition = 'width 5s linear';
+    langProgressFill.style.width = '100%';
+  });
+  setTimeout(() => {
+    currentLang = newLang;
+    langOverlay.classList.remove('visible');
+    if (isPlaying) setTimeout(pumpNext, 60);
+  }, 5200);
+});
+
+// ── MUSIC TOGGLE ──────────────────────────────────────────────────────────
+musicBtn.addEventListener('click', () => {
+  musicOn = !musicOn;
+  musicBtn.textContent = musicOn ? '🎵 ON' : '🔇 OFF';
+  musicBtn.classList.toggle('active', musicOn);
+  if (musicOn && isPlaying) startMusic();
+  else stopMusic();
+});
+
+// ── LOW PRECISION MODE ────────────────────────────────────────────────────
+modeBtn.addEventListener('click', () => {
+  if (isLowPrecision) return;
+  modeWarnOverlay.classList.add('visible');
+});
+document.getElementById('warn-cancel').addEventListener('click', () => {
+  modeWarnOverlay.classList.remove('visible');
+});
+document.getElementById('warn-confirm').addEventListener('click', () => {
+  modeWarnOverlay.classList.remove('visible');
+  isHighPrecision = false;
+  isLowPrecision = true;
+  modeBtn.textContent = 'NOISE MODE';
+  modeBtn.disabled = true;
+  modeBtn.style.opacity = '0.4';
+  modeBadge.textContent = 'NOISE DIFFUSION';
+  modeBadge.classList.add('low');
+});
+
+// ── SLEEP TIMER ───────────────────────────────────────────────────────────
+document.querySelectorAll('.timer-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.timer-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    timerMinutes = parseInt(btn.dataset.min);
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    timerDisplay.textContent = '';
+    if (timerMinutes === 0) return;
+    timerRemaining = timerMinutes * 60;
+    updateTimerDisplay();
+    timerInterval = setInterval(() => {
+      timerRemaining--;
+      updateTimerDisplay();
+      if (timerRemaining <= 0) endSession();
+    }, 1000);
+  });
+});
+function updateTimerDisplay() {
+  const m = Math.floor(timerRemaining / 60);
+  const s = timerRemaining % 60;
+  timerDisplay.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function endSession() {
+  pausePlayback();
+  if (timerInterval) clearInterval(timerInterval);
+  sessionEnd.classList.add('visible');
+}
+
+// ── KEEP ALIVE (silent audio) ─────────────────────────────────────────────
+function keepAlive() {
+  try {
+    const ctx = getAudioCtx();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    src.connect(ctx.destination);
+    src.start();
+  } catch(e) {}
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+// Wait for voices to load (critical for ja-JP on Chrome/Edge)
+function onVoicesLoaded() {
+  voicesReady = true;
+  const voices = synth.getVoices();
+  // Pre-warm Japanese voice if available
+  const jaVoice = voices.find(v => v.lang.startsWith('ja'));
+  if (jaVoice) {
+    // Silent warm-up utterance
+    const warmup = new SpeechSynthesisUtterance('');
+    warmup.volume = 0; warmup.voice = jaVoice;
+    synth.speak(warmup);
+    synth.cancel();
+  }
+}
+synth.onvoiceschanged = onVoicesLoaded;
+// Also try immediately (Firefox loads voices synchronously)
+if (synth.getVoices().length > 0) onVoicesLoaded();
+
+// Init stream display
+updateStream();
+</script>
+</body>
+</html>
