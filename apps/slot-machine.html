@@ -942,6 +942,7 @@ function updateBalance() {
   const el = document.getElementById('balanceDisplay');
   el.textContent = balance;
   el.className = 'balance-value' + (balance < 0 ? ' negative' : '');
+  localStorage.setItem('lucky5_balance', balance);
 
   // Stop auto if below -500
   if (balance <= -500 && autoSpinning) {
@@ -1075,6 +1076,8 @@ function initGrid() {
 // ============================================================
 // BOOT
 // ============================================================
+const saved = localStorage.getItem('lucky5_balance');
+if (saved !== null) balance = parseInt(saved);
 initGrid();
 renderPaylineDiagram();
 renderPayoutTable();
