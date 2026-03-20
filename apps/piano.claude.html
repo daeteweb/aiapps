@@ -137,7 +137,19 @@
     修法：改用 changedTouches + touchIdMap (Map) 精確對應每根手指與其音符
           只有 mouseup / blur 才呼叫 releaseAll()
  
-  白鍵寬度計算改用 window.screen.width/height 的長邊
+  問題4（v3.1）：手機上控制列按鈕按了沒反應
+    原因：* { touch-action:none } 全域設定導致手機瀏覽器不觸發 click 事件
+    修法：
+      a. 在 CSS 對 #topbar、所有按鈕、#bottom 補上 touch-action: auto，
+         讓這些元素恢復正常的觸控點擊行為
+      b. 新增 addBtnListener(el, fn) 工具函式，
+         同時綁 click（PC）和 touchend（手機），
+         touchend 加上 preventDefault + stopPropagation，
+         確保不會把事件冒泡到 window 的 releaseAll()
+      c. 所有控制列按鈕（REC、播放、儲存、MIDI、載入、八度）
+         全部改用 addBtnListener 取代原本的 addEventListener('click')
+ 
+  白鍵寬度計算改用 window.screen 的長邊
     原因：window.innerWidth 在部分手機橫屏時可能回傳錯誤值
     修法：取 Math.max(screen.width, screen.height) 確保永遠是長邊
  
@@ -176,6 +188,14 @@
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
+  }
+ 
+  /* 控制列的按鈕、topbar、bottom 需要恢復 touch-action:auto
+     否則手機的 click 事件不會觸發 */
+  #topbar, #topbar-row1, #topbar-row2,
+  .oct-btn, .action-btn,
+  #bottom, #bottom-label, .melody-chip {
+    touch-action: auto;
   }
  
   html, body {
@@ -694,10 +714,24 @@ function stopDots() {
 }
  
 // ══════════════════════════════════════════
+//  BUTTON HELPER（PC click + 手機 touchend）
+// ══════════════════════════════════════════
+// 因為 * { touch-action:none } 會讓部分手機瀏覽器不觸發 click，
+// 所以控制列所有按鈕都同時監聽 touchend 作為保險。
+function addBtnListener(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('touchend', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    fn();
+  });
+}
+ 
+// ══════════════════════════════════════════
 //  OCTAVE BUTTONS
 // ══════════════════════════════════════════
 ['oct-lo','oct-mid','oct-hi'].forEach(id => {
-  document.getElementById(id).addEventListener('click', () => {
+  addBtnListener(document.getElementById(id), () => {
     releaseAll();
     octaveOffset = id === 'oct-lo' ? -12 : id === 'oct-hi' ? 12 : 0;
     document.querySelectorAll('.oct-btn').forEach(b => b.classList.remove('active'));
@@ -713,7 +747,7 @@ const btnPlay = document.getElementById('btn-play');
 const btnSave = document.getElementById('btn-save');
 const btnMidi = document.getElementById('btn-midi');
  
-btnRec.addEventListener('click', () => {
+addBtnListener(btnRec, () => {
   if (isPlaying) return;
   if (!isRecording) {
     isRecording = true; recordEvents = []; recordStart = Date.now();
@@ -786,7 +820,7 @@ function playEvents(events) {
   }, maxTime + 600));
 }
  
-btnPlay.addEventListener('click', () => playEvents(recordEvents));
+addBtnListener(btnPlay, () => playEvents(recordEvents));
  
 // ══════════════════════════════════════════
 //  SAVE / LOAD
@@ -821,7 +855,7 @@ function renderChips() {
   });
 }
  
-btnSave.addEventListener('click', () => {
+addBtnListener(btnSave, () => {
   if (!recordEvents.length) return;
   const name   = prompt('旋律名稱？') || ('旋律 ' + (savedMelodies.length + 1));
   const melody = { name, events: [...recordEvents] };
@@ -834,7 +868,7 @@ btnSave.addEventListener('click', () => {
   setStatus('SAVED'); setTimeout(() => setStatus('READY'), 1500);
 });
  
-document.getElementById('btn-load').addEventListener('click', () =>
+addBtnListener(document.getElementById('btn-load'), () =>
   document.getElementById('file-input').click());
  
 document.getElementById('file-input').addEventListener('change', e => {
@@ -877,7 +911,7 @@ function buildMidi(events) {
   return new Uint8Array([...header, 0x4D,0x54,0x72,0x6B,...toI32(track.length),...track]);
 }
  
-btnMidi.addEventListener('click', () => {
+addBtnListener(btnMidi, () => {
   if (!recordEvents.length) return;
   const blob = new Blob([buildMidi(recordEvents)], { type: 'audio/midi' });
   const a = document.createElement('a');
