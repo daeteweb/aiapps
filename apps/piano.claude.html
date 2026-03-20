@@ -1,4 +1,117 @@
 <!DOCTYPE html>
+<!--
+================================================================================
+  PIANO SIMULATOR — 設計筆記
+  最後更新：2026-03-20
+================================================================================
+
+## 專案概述
+  單一 HTML 檔案的趣味鋼琴模擬器。
+  目標：好玩、輕量、能彈、能錄、能匯出 MIDI 當鈴聲。
+  不追求精確，有 lag 無所謂，能聽出旋律就夠。
+
+--------------------------------------------------------------------------------
+## 技術選擇
+
+  音訊引擎   → Web Audio API（原生 JS，無外部 library）
+               使用 OscillatorNode，波形：triangle（較柔和）
+               頻率公式：freq = 440 * 2^((midi - 69) / 12)
+
+  儲存方案   → localStorage（瀏覽器內暫存旋律清單）
+               + JSON 下載（跨裝置備份，可重新載入）
+
+  MIDI 匯出  → 純 JS 手寫二進位（Uint8Array）
+               格式：Standard MIDI File Format 0，480 ticks/beat
+               結構：MThd header → MTrk track → Delta-time + NoteOn/NoteOff events
+
+  不使用     → Tone.js 或其他外部音訊 library（維持單檔輕量）
+               IndexedDB（localStorage 對這個規模已夠用）
+
+--------------------------------------------------------------------------------
+## 介面設計
+
+  方向       → 強制橫向（Landscape），空間最大化
+  風格       → 黑底暖金，仿真鋼琴質感
+               白鍵：米白漸層，按壓後轉金色
+               黑鍵：深灰漸層，按壓後轉橘棕色
+  字型       → DM Mono（控制列）+ Playfair Display（音名顯示）
+
+  佈局（上到下）：
+    1. 頂部控制列  — 八度切換 ／ 狀態顯示 ／ 功能按鈕
+    2. 音名顯示列  — 即時顯示按下的音名與頻率 Hz，錄音進度點
+    3. 鋼琴主體    — 琴鍵區，黑鍵用 absolute 疊在白鍵之上
+    4. 底部清單    — 已儲存旋律的標籤列，點擊播放
+
+--------------------------------------------------------------------------------
+## 鍵盤範圍（22 個音）
+
+  左側延伸（3白2黑）：G3 G#3 A3 A#3 B3
+  中間完整八度        ：C4 C#4 D4 D#4 E4 F4 F#4 G4 G#4 A4 A#4 B4
+  右側延伸（3白2黑）  ：C5 C#5 D5 D#5 E5
+
+  CSS 白鍵寬度：calc((100vw - 24px) / 白鍵數量)，自動填滿螢幕寬度
+
+--------------------------------------------------------------------------------
+## PC 鍵盤對應
+
+  白鍵（下排）：Z S X D C  V G B H N  M J , K .  L /  Q W E
+  黑鍵（上排）：S=G#3  D=A#3  G=C#4  H=D#4  J=F#4  K=G#4  L=A#4  2=C#5  3=D#5
+
+--------------------------------------------------------------------------------
+## 八度切換
+
+  按鈕：低八度（-8va）／ 標準 ／ 高八度（+8va）
+  實作：octaveOffset = -12 / 0 / +12
+        實際 midi = baseMidi + octaveOffset
+        切換時強制 releaseAll() 防止殘音
+
+--------------------------------------------------------------------------------
+## 錄音邏輯（即時錄製）
+
+  格式：事件陣列 [{type:'on'|'off', midi, time}]
+        time = Date.now() - recordStart（毫秒，相對時間）
+  播放：用 setTimeout 依序觸發，不精確但夠用
+  儲存：localStorage key = 'piano_melodies'，陣列格式
+  備份：儲存時自動下載 .json 檔
+  載入：讀取 JSON 檔，支援 {name, events:[...]} 格式
+
+--------------------------------------------------------------------------------
+## MIDI 匯出格式
+
+  檔名：piano_<timestamp>.mid
+  結構：
+    MThd: 4D 54 68 64 | 00 00 00 06 | 00 00 | 00 01 | 01 E0
+    MTrk: 4D 54 72 6B | <track length 4 bytes>
+    Events: [VarLen delta-time] [0x90/0x80] [midi note] [velocity 100/0]
+    End: 00 FF 2F 00
+  Delta time 計算：Math.floor((ev.time - lastTime) * 480 / 1000)
+
+--------------------------------------------------------------------------------
+## 防卡鍵機制（核心修正）
+
+  問題根源：mouseup / touchend 綁在琴鍵本身，手指滑出範圍就收不到放開事件
+  解法：
+    1. window.addEventListener('mouseup')    → releaseAll()
+    2. window.addEventListener('touchend')   → releaseAll()
+    3. window.addEventListener('touchcancel')→ releaseAll()
+    4. window.addEventListener('blur')       → releaseAll()  // 切換視窗時靜音
+    5. CSS touch-action: none                → 禁用瀏覽器預設手勢
+    6. pressedBase (Set)                     → 追蹤目前按下的 baseMidi
+       activeOscs (Object)                   → midi → {osc, gain}
+    releaseAll() 同時清空兩者，確保 noteOff 一定被呼叫
+
+  PC 鍵盤另用 heldKeys (Set) 防止 keydown repeat 重複觸發
+
+--------------------------------------------------------------------------------
+## 音訊節點結構（每個音）
+
+  OscillatorNode → GainNode → AudioContext.destination
+  Note On  : gain linearRamp 0 → 0.32 in 12ms（防爆音）
+  Note Off : gain setTargetAtTime → 0, timeConstant=0.025（快速淡出）
+             setTimeout 120ms 後 osc.stop()
+
+================================================================================
+-->
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
