@@ -1,83 +1,87 @@
-<!DOCTYPE html>
 <!--
 ================================================================================
   PIANO SIMULATOR — 設計筆記
   最後更新：2026-03-20
+  版本：v3（手機橫屏修正版）
 ================================================================================
-
+ 
 ## 專案概述
   單一 HTML 檔案的趣味鋼琴模擬器。
   目標：好玩、輕量、能彈、能錄、能匯出 MIDI 當鈴聲。
   不追求精確，有 lag 無所謂，能聽出旋律就夠。
-
+ 
 --------------------------------------------------------------------------------
 ## 技術選擇
-
+ 
   音訊引擎   → Web Audio API（原生 JS，無外部 library）
                使用 OscillatorNode，波形：triangle（較柔和）
                頻率公式：freq = 440 * 2^((midi - 69) / 12)
-
+ 
   儲存方案   → localStorage（瀏覽器內暫存旋律清單）
                + JSON 下載（跨裝置備份，可重新載入）
-
+ 
   MIDI 匯出  → 純 JS 手寫二進位（Uint8Array）
                格式：Standard MIDI File Format 0，480 ticks/beat
                結構：MThd header → MTrk track → Delta-time + NoteOn/NoteOff events
-
+ 
   不使用     → Tone.js 或其他外部音訊 library（維持單檔輕量）
                IndexedDB（localStorage 對這個規模已夠用）
-
+ 
 --------------------------------------------------------------------------------
 ## 介面設計
-
+ 
   方向       → 強制橫向（Landscape），空間最大化
   風格       → 黑底暖金，仿真鋼琴質感
                白鍵：米白漸層，按壓後轉金色
                黑鍵：深灰漸層，按壓後轉橘棕色
   字型       → DM Mono（控制列）+ Playfair Display（音名顯示）
-
+ 
   佈局（上到下）：
-    1. 頂部控制列  — 八度切換 ／ 狀態顯示 ／ 功能按鈕
+    1. 頂部控制列  — 分兩行：第一行八度切換＋狀態；第二行功能按鈕
+                     手機上這樣排才不會擠壓
     2. 音名顯示列  — 即時顯示按下的音名與頻率 Hz，錄音進度點
     3. 鋼琴主體    — 琴鍵區，黑鍵用 absolute 疊在白鍵之上
+                     鍵盤高度用 CSS flex:1 撐滿剩餘空間，不用 JS 算死
     4. 底部清單    — 已儲存旋律的標籤列，點擊播放
-
+ 
 --------------------------------------------------------------------------------
 ## 鍵盤範圍（22 個音）
-
+ 
   左側延伸（3白2黑）：G3 G#3 A3 A#3 B3
   中間完整八度        ：C4 C#4 D4 D#4 E4 F4 F#4 G4 G#4 A4 A#4 B4
   右側延伸（3白2黑）  ：C5 C#5 D5 D#5 E5
-
-  CSS 白鍵寬度：calc((100vw - 24px) / 白鍵數量)，自動填滿螢幕寬度
-
+ 
+  白鍵寬度計算（JS）：Math.floor(screen.longEdge / 白鍵數量)，用螢幕長邊確保橫屏正確
+  黑鍵定位（JS）    ：leftWhiteIdx * WW + WW - BW/2
+                      用「左邊白鍵數量」推算，不用手動硬編 offset
+ 
 --------------------------------------------------------------------------------
 ## PC 鍵盤對應
-
-  白鍵（下排）：Z S X D C  V G B H N  M J , K .  L /  Q W E
+ 
+  白鍵（下排）：Z X C  V B N M , . /  Q W E
   黑鍵（上排）：S=G#3  D=A#3  G=C#4  H=D#4  J=F#4  K=G#4  L=A#4  2=C#5  3=D#5
-
+ 
 --------------------------------------------------------------------------------
 ## 八度切換
-
+ 
   按鈕：低八度（-8va）／ 標準 ／ 高八度（+8va）
   實作：octaveOffset = -12 / 0 / +12
         實際 midi = baseMidi + octaveOffset
         切換時強制 releaseAll() 防止殘音
-
+ 
 --------------------------------------------------------------------------------
 ## 錄音邏輯（即時錄製）
-
+ 
   格式：事件陣列 [{type:'on'|'off', midi, time}]
         time = Date.now() - recordStart（毫秒，相對時間）
   播放：用 setTimeout 依序觸發，不精確但夠用
   儲存：localStorage key = 'piano_melodies'，陣列格式
-  備份：儲存時自動下載 .json 檔
+  備份：儲存時同步下載 .json 檔（可跨裝置讀取）
   載入：讀取 JSON 檔，支援 {name, events:[...]} 格式
-
+ 
 --------------------------------------------------------------------------------
 ## MIDI 匯出格式
-
+ 
   檔名：piano_<timestamp>.mid
   結構：
     MThd: 4D 54 68 64 | 00 00 00 06 | 00 00 | 00 01 | 01 E0
@@ -85,33 +89,61 @@
     Events: [VarLen delta-time] [0x90/0x80] [midi note] [velocity 100/0]
     End: 00 FF 2F 00
   Delta time 計算：Math.floor((ev.time - lastTime) * 480 / 1000)
-
+ 
 --------------------------------------------------------------------------------
-## 防卡鍵機制（核心修正）
-
+## 防卡鍵機制
+ 
   問題根源：mouseup / touchend 綁在琴鍵本身，手指滑出範圍就收不到放開事件
   解法：
-    1. window.addEventListener('mouseup')    → releaseAll()
-    2. window.addEventListener('touchend')   → releaseAll()
-    3. window.addEventListener('touchcancel')→ releaseAll()
-    4. window.addEventListener('blur')       → releaseAll()  // 切換視窗時靜音
-    5. CSS touch-action: none                → 禁用瀏覽器預設手勢
-    6. pressedBase (Set)                     → 追蹤目前按下的 baseMidi
-       activeOscs (Object)                   → midi → {osc, gain}
-    releaseAll() 同時清空兩者，確保 noteOff 一定被呼叫
-
-  PC 鍵盤另用 heldKeys (Set) 防止 keydown repeat 重複觸發
-
+    1. window mouseup / blur          → releaseAll()（滑鼠用）
+    2. touchend / touchcancel         → 改用 changedTouches 逐一比對
+                                        只釋放這次放開的手指對應的音，
+                                        不 releaseAll()，避免多指彈奏互相干擾
+    3. CSS touch-action: none         → 禁用瀏覽器預設手勢
+    4. pressedBase (Set)              → 追蹤目前按下的 baseMidi（滑鼠/鍵盤）
+       touchIdMap (Map)               → touchId → baseMidi，多點觸控對應表
+       activeOscs (Object)            → midi → {osc, gain}
+ 
+  手機多點觸控流程：
+    touchstart → 記錄 touch.identifier → baseMidi 到 touchIdMap
+    touchend   → 從 changedTouches 取 identifier → 查 touchIdMap → noteOff 對應音
+    touchcancel→ 同上，確保意外中斷也能釋放
+ 
 --------------------------------------------------------------------------------
 ## 音訊節點結構（每個音）
-
+ 
   OscillatorNode → GainNode → AudioContext.destination
   Note On  : gain linearRamp 0 → 0.32 in 12ms（防爆音）
   Note Off : gain setTargetAtTime → 0, timeConstant=0.025（快速淡出）
-             setTimeout 120ms 後 osc.stop()
-
+             setTimeout 130ms 後 osc.stop()
+ 
+--------------------------------------------------------------------------------
+## 手機版修正重點（v3 新增）
+ 
+  問題1：鍵盤高度爆出畫面
+    原因：JS 用 window.innerHeight * 0.6 在頁面載入時算死，
+          手機橫屏時 innerHeight 是短邊（約 390px），算出來的鍵太高
+    修法：鍵盤容器改用 CSS flex:1 自動撐滿剩餘高度；
+          白鍵高度改用 CSS height:100%，完全交給 flexbox 管理；
+          黑鍵高度改用 CSS height:60%，相對白鍵自動縮放
+ 
+  問題2：topbar 按鈕在手機上擠壓換行
+    原因：按鈕太多（7個），手機橫屏寬度不夠放成一行
+    修法：topbar 改為兩行，第一行放八度切換＋狀態，第二行放功能按鈕
+          按鈕文字縮短，padding 減小
+ 
+  問題3：多點觸控 releaseAll() 誤殺其他音
+    原因：touchend 直接 releaseAll()，多指彈奏時放開一根手指會把全部音停掉
+    修法：改用 changedTouches + touchIdMap (Map) 精確對應每根手指與其音符
+          只有 mouseup / blur 才呼叫 releaseAll()
+ 
+  白鍵寬度計算改用 window.screen.width/height 的長邊
+    原因：window.innerWidth 在部分手機橫屏時可能回傳錯誤值
+    修法：取 Math.max(screen.width, screen.height) 確保永遠是長邊
+ 
 ================================================================================
 -->
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -119,23 +151,23 @@
 <title>PIANO</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700&display=swap');
-
+ 
   :root {
-    --bg: #0e0e0e;
-    --panel: #171717;
-    --panel2: #1f1f1f;
-    --border: #2e2e2e;
-    --accent: #c8a96e;
-    --accent2: #e8c98a;
-    --white-key: #f4f0e8;
-    --white-key-pressed: #c8a96e;
-    --black-key: #1c1c1c;
-    --black-key-pressed: #b8923e;
-    --text: #ccc;
-    --text-dim: #666;
-    --red: #e05c5c;
+    --bg:               #0e0e0e;
+    --panel:            #171717;
+    --panel2:           #1f1f1f;
+    --border:           #2e2e2e;
+    --accent:           #c8a96e;
+    --accent2:          #e8c98a;
+    --white-key:        #f4f0e8;
+    --white-key-press:  #c8a96e;
+    --black-key:        #1c1c1c;
+    --black-key-press:  #b8923e;
+    --text:             #ccc;
+    --text-dim:         #666;
+    --red:              #e05c5c;
   }
-
+ 
   * {
     box-sizing: border-box;
     margin: 0; padding: 0;
@@ -143,50 +175,51 @@
     -webkit-user-select: none;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
   }
-
+ 
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+  }
+ 
   body {
     background: var(--bg);
     color: var(--text);
     font-family: 'DM Mono', monospace;
-    height: 100vh;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+    padding-left:   env(safe-area-inset-left);
+    padding-right:  env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
   }
-
-  /* ── TOP BAR ── */
+ 
+  /* ── TOP BAR：兩行 ── */
   #topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 18px;
+    flex-shrink: 0;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    gap: 10px;
-    min-height: 56px;
+    display: flex;
+    flex-direction: column;
   }
-
-  .bar-section {
+  #topbar-row1, #topbar-row2 {
     display: flex;
     align-items: center;
-    gap: 8px;
+    padding: 5px 10px;
+    gap: 6px;
   }
-
-  /* octave buttons */
+  #topbar-row1 { border-bottom: 1px solid var(--border); }
+  #topbar-row2 { justify-content: flex-end; }
+ 
   .oct-btn {
     background: var(--panel2);
     color: var(--text-dim);
     border: 1px solid var(--border);
-    padding: 6px 13px;
+    padding: 5px 10px;
     border-radius: 4px;
     font-family: 'DM Mono', monospace;
-    font-size: 0.72em;
+    font-size: 0.7em;
     cursor: pointer;
-    letter-spacing: 0.05em;
     transition: all 0.15s;
   }
   .oct-btn.active {
@@ -195,66 +228,57 @@
     border-color: var(--accent);
     font-weight: 500;
   }
-
-  /* status label */
+ 
   #status {
-    font-size: 0.68em;
+    font-size: 0.65em;
     color: var(--text-dim);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    min-width: 90px;
-    text-align: center;
+    margin-left: auto;
     transition: color 0.2s;
   }
-  #status.rec { color: var(--red); animation: blink 1s step-start infinite; }
+  #status.rec  { color: var(--red);     animation: blink 1s step-start infinite; }
   #status.play { color: var(--accent2); }
   @keyframes blink { 50% { opacity: 0.3; } }
-
-  /* action buttons */
+ 
   .action-btn {
     background: var(--panel2);
     color: var(--text);
     border: 1px solid var(--border);
-    padding: 6px 12px;
+    padding: 5px 9px;
     border-radius: 4px;
     font-family: 'DM Mono', monospace;
-    font-size: 0.72em;
+    font-size: 0.68em;
     cursor: pointer;
-    letter-spacing: 0.04em;
     transition: all 0.15s;
     white-space: nowrap;
   }
-  .action-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .action-btn.rec-active { border-color: var(--red); color: var(--red); }
-  .action-btn.disabled { opacity: 0.3; pointer-events: none; }
-
-  /* hidden file input */
+  .action-btn:active     { filter: brightness(1.3); }
+  .action-btn.rec-active { border-color: var(--red);  color: var(--red); }
+  .action-btn.disabled   { opacity: 0.28; pointer-events: none; }
   #file-input { display: none; }
-
+ 
   /* ── NOTE DISPLAY ── */
   #note-display {
+    flex-shrink: 0;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
-    padding: 5px 18px;
-    min-height: 28px;
+    padding: 3px 12px;
+    height: 26px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-    overflow: hidden;
+    gap: 8px;
   }
   #note-label {
     font-family: 'Playfair Display', serif;
-    font-size: 1em;
+    font-size: 0.95em;
     color: var(--accent);
-    min-width: 48px;
-    letter-spacing: 0.05em;
-    transition: opacity 0.2s;
+    min-width: 44px;
   }
   #note-freq {
-    font-size: 0.65em;
+    font-size: 0.62em;
     color: var(--text-dim);
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
   }
   #rec-bar {
     display: flex;
@@ -263,108 +287,106 @@
     align-items: center;
   }
   .rec-dot {
-    width: 6px; height: 6px;
+    width: 5px; height: 5px;
     border-radius: 50%;
     background: var(--border);
     transition: background 0.1s;
   }
   .rec-dot.lit { background: var(--accent); }
-
+ 
   /* ── PIANO STAGE ── */
   #stage {
-    flex: 1;
+    flex: 1;                   /* 撐滿剩餘高度 */
     display: flex;
     justify-content: center;
-    align-items: center;
-    background:
-      radial-gradient(ellipse at center bottom, #1e1a14 0%, var(--bg) 70%);
+    align-items: stretch;      /* keyboard 撐滿整個高度 */
+    background: radial-gradient(ellipse at center bottom, #1e1a14 0%, var(--bg) 70%);
     position: relative;
     overflow: hidden;
-    padding: 0 12px;
+    padding: 8px 8px 0;
   }
-
-  /* wood rail above keys */
-  #stage::before {
+  #stage::before {             /* 木頭邊框 */
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
-    height: 14px;
+    height: 8px;
     background: linear-gradient(to bottom, #2a1f0e, #1a1208);
     border-bottom: 1px solid #3d2b10;
   }
-
+ 
   /* ── KEYBOARD ── */
   #keyboard {
     position: relative;
-    height: 68vh;
     display: flex;
     align-items: flex-start;
+    /* 寬度由 JS 設定；高度由父層 stretch 決定 */
   }
-
-  /* white key */
+ 
+  /* 白鍵：height 100% 由 flexbox 決定，不寫死數值 */
   .wk {
     position: relative;
-    background: linear-gradient(to bottom, #e8e0cc 0%, var(--white-key) 20%, #ede8dc 100%);
+    flex-shrink: 0;
+    height: 100%;
+    background: linear-gradient(to bottom, #e8e0cc 0%, var(--white-key) 15%, #ede8dc 100%);
     border: 1px solid #b0a898;
     border-top: none;
-    border-radius: 0 0 7px 7px;
+    border-radius: 0 0 6px 6px;
     cursor: pointer;
     z-index: 1;
-    flex-shrink: 0;
-    box-shadow: 2px 4px 8px rgba(0,0,0,0.6), inset 1px 0 0 rgba(255,255,255,0.3);
+    box-shadow: 2px 3px 6px rgba(0,0,0,0.5), inset 1px 0 0 rgba(255,255,255,0.25);
     transition: background 0.05s;
   }
   .wk.pressed {
-    background: linear-gradient(to bottom, var(--white-key-pressed) 0%, #e8b87a 100%);
-    box-shadow: 1px 2px 4px rgba(0,0,0,0.6);
+    background: linear-gradient(to bottom, var(--white-key-press) 0%, #e8b87a 100%);
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.5);
     transform: translateY(1px);
   }
-  /* subtle label on white key */
   .wk::after {
     content: attr(data-label);
     position: absolute;
-    bottom: 8px;
-    left: 50%;
+    bottom: 6px; left: 50%;
     transform: translateX(-50%);
-    font-size: 0.5em;
+    font-size: 0.42em;
     color: #a09080;
-    font-family: 'DM Mono', monospace;
-    letter-spacing: 0;
     pointer-events: none;
   }
-
-  /* black key */
+ 
+  /* 黑鍵：height 60% 相對白鍵自動縮放 */
   .bk {
     position: absolute;
+    top: 0;
+    height: 60%;
     background: linear-gradient(to bottom, #2e2e2e, var(--black-key) 60%, #111);
     border: 1px solid #111;
     border-top: none;
-    border-radius: 0 0 5px 5px;
+    border-radius: 0 0 4px 4px;
     cursor: pointer;
     z-index: 2;
-    box-shadow: 3px 5px 10px rgba(0,0,0,0.8), inset 1px 0 0 rgba(255,255,255,0.06);
+    box-shadow: 2px 4px 8px rgba(0,0,0,0.8), inset 1px 0 0 rgba(255,255,255,0.05);
     transition: background 0.05s;
   }
   .bk.pressed {
-    background: linear-gradient(to bottom, var(--black-key-pressed), #8a6022);
+    background: linear-gradient(to bottom, var(--black-key-press), #8a6022);
     transform: translateY(1px);
-    box-shadow: 1px 2px 5px rgba(0,0,0,0.8);
+    box-shadow: 1px 2px 4px rgba(0,0,0,0.8);
   }
-
-  /* ── BOTTOM AREA (saved list) ── */
+ 
+  /* ── BOTTOM LIST ── */
   #bottom {
+    flex-shrink: 0;
     background: var(--panel);
     border-top: 1px solid var(--border);
-    padding: 6px 18px;
-    flex-shrink: 0;
-    min-height: 36px;
+    padding: 4px 10px;
+    height: 30px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     overflow-x: auto;
+    overflow-y: hidden;
+    touch-action: pan-x;       /* 底部清單可左右滑動 */
   }
   #bottom-label {
-    font-size: 0.62em;
+    font-size: 0.58em;
     color: var(--text-dim);
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -374,95 +396,85 @@
     background: var(--panel2);
     border: 1px solid var(--border);
     color: var(--text);
-    padding: 3px 10px;
+    padding: 2px 8px;
     border-radius: 20px;
-    font-size: 0.68em;
+    font-size: 0.62em;
     cursor: pointer;
     white-space: nowrap;
-    transition: all 0.15s;
     flex-shrink: 0;
+    transition: all 0.15s;
+    touch-action: auto;
   }
-  .melody-chip:hover { border-color: var(--accent); color: var(--accent); }
   .melody-chip.playing { border-color: var(--accent2); color: var(--accent2); }
   .melody-chip .del {
-    margin-left: 6px;
+    margin-left: 5px;
     color: var(--text-dim);
     font-size: 0.9em;
   }
-  .melody-chip .del:hover { color: var(--red); }
 </style>
 </head>
 <body>
-
+ 
 <!-- TOP BAR -->
 <div id="topbar">
-  <div class="bar-section">
+  <div id="topbar-row1">
     <button class="oct-btn" id="oct-lo">－8va</button>
     <button class="oct-btn active" id="oct-mid">標準</button>
     <button class="oct-btn" id="oct-hi">＋8va</button>
+    <div id="status">READY</div>
   </div>
-
-  <div id="status">READY</div>
-
-  <div class="bar-section">
-    <button class="action-btn" id="btn-rec">● 錄音</button>
+  <div id="topbar-row2">
+    <button class="action-btn" id="btn-rec">● REC</button>
     <button class="action-btn disabled" id="btn-play">▶ 播放</button>
-    <button class="action-btn disabled" id="btn-save">儲存</button>
+    <button class="action-btn disabled" id="btn-save">↓ 儲存</button>
     <button class="action-btn disabled" id="btn-midi">↓ MIDI</button>
     <button class="action-btn" id="btn-load">↑ 載入</button>
-    <input type="file" id="file-input" accept=".json,.mid">
+    <input type="file" id="file-input" accept=".json">
   </div>
 </div>
-
+ 
 <!-- NOTE DISPLAY -->
 <div id="note-display">
   <div id="note-label">—</div>
   <div id="note-freq"></div>
   <div id="rec-bar">
-    <div class="rec-dot" id="rd0"></div>
-    <div class="rec-dot" id="rd1"></div>
-    <div class="rec-dot" id="rd2"></div>
-    <div class="rec-dot" id="rd3"></div>
-    <div class="rec-dot" id="rd4"></div>
-    <div class="rec-dot" id="rd5"></div>
-    <div class="rec-dot" id="rd6"></div>
-    <div class="rec-dot" id="rd7"></div>
+    <div class="rec-dot" id="rd0"></div><div class="rec-dot" id="rd1"></div>
+    <div class="rec-dot" id="rd2"></div><div class="rec-dot" id="rd3"></div>
+    <div class="rec-dot" id="rd4"></div><div class="rec-dot" id="rd5"></div>
+    <div class="rec-dot" id="rd6"></div><div class="rec-dot" id="rd7"></div>
   </div>
 </div>
-
+ 
 <!-- PIANO -->
 <div id="stage">
   <div id="keyboard"></div>
 </div>
-
-<!-- BOTTOM SAVED LIST -->
+ 
+<!-- SAVED LIST -->
 <div id="bottom">
   <span id="bottom-label">已儲存</span>
-  <!-- chips injected here -->
 </div>
-
+ 
 <script>
-// ══════════════════════════════
-//  CONSTANTS
-// ══════════════════════════════
+// ══════════════════════════════════════════
+//  NOTE LAYOUT  [name, isBlack, midiNum]
+// ══════════════════════════════════════════
 const NOTE_LAYOUT = [
-  // [noteName, isBLack, midiNum]
-  ['G3',  false, 55], ['G#3', true,  56],
-  ['A3',  false, 57], ['A#3', true,  58],
-  ['B3',  false, 59],
-  ['C4',  false, 60], ['C#4', true,  61],
-  ['D4',  false, 62], ['D#4', true,  63],
-  ['E4',  false, 64],
-  ['F4',  false, 65], ['F#4', true,  66],
-  ['G4',  false, 67], ['G#4', true,  68],
-  ['A4',  false, 69], ['A#4', true,  70],
-  ['B4',  false, 71],
-  ['C5',  false, 72], ['C#5', true,  73],
-  ['D5',  false, 74], ['D#5', true,  75],
-  ['E5',  false, 76],
+  ['G3',false,55],['G#3',true,56],
+  ['A3',false,57],['A#3',true,58],
+  ['B3',false,59],
+  ['C4',false,60],['C#4',true,61],
+  ['D4',false,62],['D#4',true,63],
+  ['E4',false,64],
+  ['F4',false,65],['F#4',true,66],
+  ['G4',false,67],['G#4',true,68],
+  ['A4',false,69],['A#4',true,70],
+  ['B4',false,71],
+  ['C5',false,72],['C#5',true,73],
+  ['D5',false,74],['D#5',true,75],
+  ['E5',false,76],
 ];
-
-// PC keyboard map: key → baseMidi
+ 
 const KEY_MAP = {
   'z':55,'s':56,'x':57,'d':58,'c':59,
   'v':60,'g':61,'b':62,'h':63,'n':64,
@@ -470,203 +482,191 @@ const KEY_MAP = {
   'l':70,'/':71,
   'q':72,'2':73,'w':74,'3':75,'e':76
 };
-
-// ══════════════════════════════
+ 
+// ══════════════════════════════════════════
 //  STATE
-// ══════════════════════════════
-let audioCtx = null;
-let octaveOffset = 0;       // -12, 0, +12
-let isRecording = false;
-let isPlaying   = false;
-let recordStart = 0;
-let recordEvents = [];      // [{type:'on'|'off', midi, time}]
-let activeOscs = {};        // midi → {osc, gain}
-let pressedBase = new Set();// baseMidi currently pressed
-let savedMelodies = [];     // [{name, events}]  persisted in localStorage
-let playbackTimeouts = [];  // for stopping playback
-
-// ══════════════════════════════
+// ══════════════════════════════════════════
+let audioCtx      = null;
+let octaveOffset  = 0;
+let isRecording   = false;
+let isPlaying     = false;
+let recordStart   = 0;
+let recordEvents  = [];
+let activeOscs    = {};         // (baseMidi + offset) → {osc, gain}
+let pressedBase   = new Set();  // 滑鼠/鍵盤目前按下的 baseMidi
+let touchIdMap    = new Map();  // touchIdentifier → baseMidi（多點觸控）
+let savedMelodies = [];
+let playbackTimers = [];
+ 
+// ══════════════════════════════════════════
 //  AUDIO
-// ══════════════════════════════
+// ══════════════════════════════════════════
 function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
-
-function midiToFreq(midi) {
-  return 440 * Math.pow(2, (midi - 69) / 12);
-}
-
-function noteOn(baseMidi, fromPlayback = false) {
+function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+ 
+function noteOn(baseMidi) {
   initAudio();
-  const midi = baseMidi + (fromPlayback ? 0 : octaveOffset);
+  const midi = baseMidi + octaveOffset;
   if (activeOscs[midi]) return;
-
+ 
   const freq = midiToFreq(midi);
   const osc  = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-
   osc.type = 'triangle';
   osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
   gain.gain.setValueAtTime(0, audioCtx.currentTime);
   gain.gain.linearRampToValueAtTime(0.32, audioCtx.currentTime + 0.012);
-
   osc.connect(gain);
   gain.connect(audioCtx.destination);
   osc.start();
-
   activeOscs[midi] = { osc, gain };
-  if (!fromPlayback) pressedBase.add(baseMidi);
-
-  // UI
-  const el = document.querySelector(`[data-midi="${baseMidi}"]`);
-  if (el) el.classList.add('pressed');
+ 
+  pressedBase.add(baseMidi);
+  keyEl(baseMidi)?.classList.add('pressed');
   showNote(NOTE_LAYOUT.find(n => n[2] === baseMidi)?.[0] || '', freq);
-
-  // Record
-  if (isRecording && !fromPlayback) {
+ 
+  if (isRecording)
     recordEvents.push({ type: 'on', midi, time: Date.now() - recordStart });
-  }
 }
-
-function noteOff(baseMidi, fromPlayback = false) {
-  const midi = baseMidi + (fromPlayback ? 0 : octaveOffset);
+ 
+function noteOff(baseMidi) {
+  const midi = baseMidi + octaveOffset;
   const data = activeOscs[midi];
   if (data) {
     const { osc, gain } = data;
     gain.gain.cancelScheduledValues(audioCtx.currentTime);
     gain.gain.setValueAtTime(gain.gain.value, audioCtx.currentTime);
     gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.025);
-    setTimeout(() => { try { osc.stop(); osc.disconnect(); } catch(e){} }, 120);
+    setTimeout(() => { try { osc.stop(); osc.disconnect(); } catch(e){} }, 130);
     delete activeOscs[midi];
   }
-  if (!fromPlayback) pressedBase.delete(baseMidi);
-
-  const el = document.querySelector(`[data-midi="${baseMidi}"]`);
-  if (el) el.classList.remove('pressed');
-  if (!fromPlayback && pressedBase.size === 0) clearNote();
-
-  if (isRecording && !fromPlayback) {
+  pressedBase.delete(baseMidi);
+  keyEl(baseMidi)?.classList.remove('pressed');
+  if (pressedBase.size === 0 && touchIdMap.size === 0) clearNote();
+ 
+  if (isRecording)
     recordEvents.push({ type: 'off', midi, time: Date.now() - recordStart });
-  }
 }
-
+ 
+// 強制釋放全部（八度切換 / mouseup / blur 時用）
 function releaseAll() {
   [...pressedBase].forEach(m => noteOff(m));
-  // also kill anything lingering
-  Object.keys(activeOscs).forEach(midi => {
-    const { osc, gain } = activeOscs[midi];
-    try { gain.gain.setTargetAtTime(0, audioCtx?.currentTime || 0, 0.02); setTimeout(() => osc.stop(), 100); } catch(e){}
-    delete activeOscs[midi];
-  });
+  touchIdMap.forEach(m => noteOff(m));
+  touchIdMap.clear();
   pressedBase.clear();
+  Object.keys(activeOscs).forEach(k => {
+    try { activeOscs[k].osc.stop(); activeOscs[k].osc.disconnect(); } catch(e){}
+    delete activeOscs[k];
+  });
+  document.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
 }
-
-// ══════════════════════════════
-//  KEYBOARD BUILD
-// ══════════════════════════════
+ 
+function keyEl(baseMidi) {
+  return document.querySelector(`[data-midi="${baseMidi}"]`);
+}
+ 
+// ══════════════════════════════════════════
+//  BUILD KEYBOARD
+// ══════════════════════════════════════════
 (function buildKeyboard() {
   const kb     = document.getElementById('keyboard');
   const whites = NOTE_LAYOUT.filter(n => !n[1]);
-  const WW     = Math.min(Math.floor((window.innerWidth - 24) / whites.length), 60);
-  const BW     = Math.round(WW * 0.62);
-  const WH     = Math.round(window.innerHeight * 0.6);
-  const BH     = Math.round(WH * 0.60);
-
+ 
+  // 用螢幕長邊確保橫屏時計算正確
+  const longEdge = Math.max(window.screen.width, window.screen.height);
+  const WW = Math.min(Math.floor(longEdge / whites.length), 62);
+  const BW = Math.round(WW * 0.62);
+ 
   kb.style.width = (WW * whites.length) + 'px';
-
-  // place white keys
-  let wIdx = 0;
-  const wPositions = {}; // noteName → leftPx
+ 
+  // 白鍵（height 由 CSS 100% 決定）
   NOTE_LAYOUT.forEach(([name, isBlack, midi]) => {
     if (isBlack) return;
     const div = document.createElement('div');
-    div.className = 'wk';
-    div.dataset.midi = midi;
-    div.dataset.base = midi;
+    div.className     = 'wk';
+    div.dataset.midi  = midi;
     div.dataset.label = name;
-    div.style.width  = WW + 'px';
-    div.style.height = WH + 'px';
-
-    div.addEventListener('mousedown',  e => { e.preventDefault(); initAudio(); noteOn(midi); });
-    div.addEventListener('touchstart', e => { e.preventDefault(); initAudio(); noteOn(midi); }, {passive:false});
-
+    div.style.width   = WW + 'px';
+ 
+    div.addEventListener('mousedown', e => { e.preventDefault(); noteOn(midi); });
+    div.addEventListener('touchstart', e => {
+      e.preventDefault();
+      [...e.changedTouches].forEach(t => {
+        touchIdMap.set(t.identifier, midi);
+        noteOn(midi);
+      });
+    }, { passive: false });
+ 
     kb.appendChild(div);
-    wPositions[name] = wIdx * WW;
-    wIdx++;
   });
-
-  // overlay black keys
-  const blackOffsets = { // offset fraction of WW from left white key
-    'G#3': 1, 'A#3': 2,
-    'C#4': 5, 'D#4': 6,
-    'F#4': 8, 'G#4': 9, 'A#4': 10,
-    'C#5': 12, 'D#5': 13,
-  };
-
-  // Map: which white is to the LEFT of each black key
-  // We'll just position them by computing from white key count
-  const whiteNames = NOTE_LAYOUT.filter(n=>!n[1]).map(n=>n[0]);
-
+ 
+  // 黑鍵（absolute，height 由 CSS 60% 決定）
   NOTE_LAYOUT.forEach(([name, isBlack, midi]) => {
     if (!isBlack) return;
-    // find the white key to the left
-    const noteBase = name.replace('#','').replace(/\d/,'');
-    const octave   = name.match(/\d/)[0];
-    // The black key sits between whiteIdx and whiteIdx+1
-    // We determine position by its MIDI vs the white key midi positions
-    const leftWhiteIdx = NOTE_LAYOUT
-      .filter(n => !n[1] && n[2] < midi)
-      .length - 1;
+    const leftWhiteIdx = NOTE_LAYOUT.filter(n => !n[1] && n[2] < midi).length - 1;
     const leftPx = (leftWhiteIdx + 1) * WW - BW / 2;
-
+ 
     const div = document.createElement('div');
-    div.className = 'bk';
+    div.className    = 'bk';
     div.dataset.midi = midi;
-    div.dataset.base = midi;
     div.style.left   = leftPx + 'px';
     div.style.width  = BW + 'px';
-    div.style.height = BH + 'px';
-    div.style.top    = '0';
-
-    div.addEventListener('mousedown',  e => { e.preventDefault(); initAudio(); noteOn(midi); });
-    div.addEventListener('touchstart', e => { e.preventDefault(); initAudio(); noteOn(midi); }, {passive:false});
-
+ 
+    div.addEventListener('mousedown', e => { e.preventDefault(); noteOn(midi); });
+    div.addEventListener('touchstart', e => {
+      e.preventDefault();
+      [...e.changedTouches].forEach(t => {
+        touchIdMap.set(t.identifier, midi);
+        noteOn(midi);
+      });
+    }, { passive: false });
+ 
     kb.appendChild(div);
   });
 })();
-
-// ══════════════════════════════
-//  GLOBAL RELEASE (anti-stuck)
-// ══════════════════════════════
-window.addEventListener('mouseup',   () => releaseAll());
-window.addEventListener('touchend',  () => releaseAll());
-window.addEventListener('touchcancel', () => releaseAll());
-window.addEventListener('blur',      () => releaseAll());
-
-// ══════════════════════════════
+ 
+// ══════════════════════════════════════════
+//  TOUCH RELEASE（精確對應每根手指）
+// ══════════════════════════════════════════
+function handleTouchEnd(e) {
+  e.preventDefault();
+  [...e.changedTouches].forEach(t => {
+    const midi = touchIdMap.get(t.identifier);
+    if (midi !== undefined) {
+      noteOff(midi);
+      touchIdMap.delete(t.identifier);
+    }
+  });
+}
+window.addEventListener('touchend',    handleTouchEnd, { passive: false });
+window.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+ 
+// 滑鼠 & 視窗失焦 → 全部釋放
+window.addEventListener('mouseup', releaseAll);
+window.addEventListener('blur',    releaseAll);
+ 
+// ══════════════════════════════════════════
 //  PC KEYBOARD
-// ══════════════════════════════
+// ══════════════════════════════════════════
 const heldKeys = new Set();
 window.addEventListener('keydown', e => {
   if (e.repeat) return;
-  const key = e.key.toLowerCase();
-  const midi = KEY_MAP[key];
-  if (midi && !heldKeys.has(key)) {
-    heldKeys.add(key);
-    initAudio();
-    noteOn(midi);
+  const midi = KEY_MAP[e.key.toLowerCase()];
+  if (midi && !heldKeys.has(e.key)) {
+    heldKeys.add(e.key); initAudio(); noteOn(midi);
   }
 });
 window.addEventListener('keyup', e => {
-  const key = e.key.toLowerCase();
-  const midi = KEY_MAP[key];
-  if (midi) { heldKeys.delete(key); noteOff(midi); }
+  const midi = KEY_MAP[e.key.toLowerCase()];
+  if (midi) { heldKeys.delete(e.key); noteOff(midi); }
 });
-
-// ══════════════════════════════
-//  NOTE DISPLAY
-// ══════════════════════════════
+ 
+// ══════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════
 function showNote(name, freq) {
   document.getElementById('note-label').textContent = name || '—';
   document.getElementById('note-freq').textContent  = freq ? Math.round(freq) + ' Hz' : '';
@@ -675,10 +675,27 @@ function clearNote() {
   document.getElementById('note-label').textContent = '—';
   document.getElementById('note-freq').textContent  = '';
 }
-
-// ══════════════════════════════
+function setStatus(msg, cls = '') {
+  const el = document.getElementById('status');
+  el.textContent = msg; el.className = cls;
+}
+let dotTimer = null, dotCount = 0;
+function startDots() {
+  dotCount = 0;
+  dotTimer = setInterval(() => {
+    dotCount = (dotCount + 1) % 9;
+    for (let i = 0; i < 8; i++)
+      document.getElementById('rd' + i).classList.toggle('lit', i < dotCount);
+  }, 280);
+}
+function stopDots() {
+  clearInterval(dotTimer);
+  for (let i = 0; i < 8; i++) document.getElementById('rd' + i).classList.remove('lit');
+}
+ 
+// ══════════════════════════════════════════
 //  OCTAVE BUTTONS
-// ══════════════════════════════
+// ══════════════════════════════════════════
 ['oct-lo','oct-mid','oct-hi'].forEach(id => {
   document.getElementById(id).addEventListener('click', () => {
     releaseAll();
@@ -687,93 +704,50 @@ function clearNote() {
     document.getElementById(id).classList.add('active');
   });
 });
-
-// ══════════════════════════════
-//  STATUS
-// ══════════════════════════════
-function setStatus(msg, cls = '') {
-  const el = document.getElementById('status');
-  el.textContent = msg;
-  el.className = cls;
-}
-
-// ══════════════════════════════
-//  REC DOTS
-// ══════════════════════════════
-let dotInterval = null;
-let dotCount = 0;
-function startDots() {
-  dotCount = 0;
-  dotInterval = setInterval(() => {
-    dotCount = (dotCount + 1) % 9;
-    for (let i = 0; i < 8; i++) {
-      document.getElementById('rd'+i).classList.toggle('lit', i < dotCount);
-    }
-  }, 300);
-}
-function stopDots() {
-  clearInterval(dotInterval);
-  for (let i = 0; i < 8; i++) document.getElementById('rd'+i).classList.remove('lit');
-}
-
-// ══════════════════════════════
+ 
+// ══════════════════════════════════════════
 //  RECORDING
-// ══════════════════════════════
+// ══════════════════════════════════════════
 const btnRec  = document.getElementById('btn-rec');
 const btnPlay = document.getElementById('btn-play');
 const btnSave = document.getElementById('btn-save');
 const btnMidi = document.getElementById('btn-midi');
-
+ 
 btnRec.addEventListener('click', () => {
   if (isPlaying) return;
   if (!isRecording) {
-    // START REC
-    isRecording  = true;
-    recordEvents = [];
-    recordStart  = Date.now();
-    btnRec.textContent = '■ 停止';
-    btnRec.classList.add('rec-active');
-    btnPlay.classList.add('disabled');
-    btnSave.classList.add('disabled');
-    btnMidi.classList.add('disabled');
-    setStatus('● REC', 'rec');
-    startDots();
+    isRecording = true; recordEvents = []; recordStart = Date.now();
+    btnRec.textContent = '■ STOP'; btnRec.classList.add('rec-active');
+    [btnPlay, btnSave, btnMidi].forEach(b => b.classList.add('disabled'));
+    setStatus('● REC', 'rec'); startDots();
   } else {
-    // STOP REC
-    isRecording = false;
-    releaseAll();
-    btnRec.textContent = '● 錄音';
-    btnRec.classList.remove('rec-active');
+    isRecording = false; releaseAll();
+    btnRec.textContent = '● REC'; btnRec.classList.remove('rec-active');
     stopDots();
     if (recordEvents.length > 0) {
-      btnPlay.classList.remove('disabled');
-      btnSave.classList.remove('disabled');
-      btnMidi.classList.remove('disabled');
-      setStatus('RECORDED', '');
+      [btnPlay, btnSave, btnMidi].forEach(b => b.classList.remove('disabled'));
+      setStatus('RECORDED');
     } else {
-      setStatus('READY', '');
+      setStatus('READY');
     }
   }
 });
-
-// ══════════════════════════════
+ 
+// ══════════════════════════════════════════
 //  PLAYBACK
-// ══════════════════════════════
+// ══════════════════════════════════════════
 function playEvents(events) {
-  if (isRecording || isPlaying) return;
+  if (isRecording || isPlaying || !events?.length) return;
+  initAudio();
   isPlaying = true;
   setStatus('▶ PLAY', 'play');
   btnRec.classList.add('disabled');
-
-  // stop any residual
   releaseAll();
-
-  const t0 = Date.now();
-  playbackTimeouts = [];
-
+  playbackTimers = [];
+ 
   events.forEach(ev => {
-    const t = setTimeout(() => {
-      if (ev.type === 'on')  {
+    playbackTimers.push(setTimeout(() => {
+      if (ev.type === 'on') {
         const freq = midiToFreq(ev.midi);
         const osc  = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -782,208 +756,137 @@ function playEvents(events) {
         gain.gain.setValueAtTime(0, audioCtx.currentTime);
         gain.gain.linearRampToValueAtTime(0.32, audioCtx.currentTime + 0.012);
         osc.connect(gain); gain.connect(audioCtx.destination); osc.start();
-        activeOscs['pb_'+ev.midi] = { osc, gain };
-        // light up key
-        const el = document.querySelector(`[data-midi="${ev.midi - octaveOffset}"]`);
-        if (el) el.classList.add('pressed');
-        const note = NOTE_LAYOUT.find(n => n[2] === ev.midi - octaveOffset);
-        showNote(note?.[0] || '', freq);
+        activeOscs['pb' + ev.midi] = { osc, gain };
+        const base = ev.midi - octaveOffset;
+        keyEl(base)?.classList.add('pressed');
+        showNote(NOTE_LAYOUT.find(n => n[2] === base)?.[0] || '', freq);
       } else {
-        const data = activeOscs['pb_'+ev.midi];
+        const data = activeOscs['pb' + ev.midi];
         if (data) {
           data.gain.gain.cancelScheduledValues(audioCtx.currentTime);
           data.gain.gain.setValueAtTime(data.gain.gain.value, audioCtx.currentTime);
           data.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.025);
-          setTimeout(() => { try { data.osc.stop(); } catch(e){} }, 120);
-          delete activeOscs['pb_'+ev.midi];
+          setTimeout(() => { try { data.osc.stop(); } catch(e){} }, 130);
+          delete activeOscs['pb' + ev.midi];
         }
-        const el = document.querySelector(`[data-midi="${ev.midi - octaveOffset}"]`);
-        if (el) el.classList.remove('pressed');
+        keyEl(ev.midi - octaveOffset)?.classList.remove('pressed');
       }
-    }, ev.time);
-    playbackTimeouts.push(t);
+    }, ev.time));
   });
-
-  // find total duration
+ 
   const maxTime = events.reduce((m, e) => Math.max(m, e.time), 0);
-  const done = setTimeout(() => {
+  playbackTimers.push(setTimeout(() => {
     isPlaying = false;
-    releaseAll();
-    Object.keys(activeOscs).filter(k=>k.startsWith('pb_')).forEach(k=>{
-      try { activeOscs[k].osc.stop(); } catch(e){}
-      delete activeOscs[k];
+    Object.keys(activeOscs).filter(k => k.startsWith('pb')).forEach(k => {
+      try { activeOscs[k].osc.stop(); } catch(e){} delete activeOscs[k];
     });
     document.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
-    setStatus('READY', '');
-    btnRec.classList.remove('disabled');
-    clearNote();
+    setStatus('READY'); btnRec.classList.remove('disabled'); clearNote();
     document.querySelectorAll('.melody-chip').forEach(c => c.classList.remove('playing'));
-  }, maxTime + 600);
-  playbackTimeouts.push(done);
+  }, maxTime + 600));
 }
-
-btnPlay.addEventListener('click', () => {
-  if (recordEvents.length === 0) return;
-  initAudio();
-  playEvents(recordEvents);
-});
-
-// ══════════════════════════════
-//  SAVE
-// ══════════════════════════════
+ 
+btnPlay.addEventListener('click', () => playEvents(recordEvents));
+ 
+// ══════════════════════════════════════════
+//  SAVE / LOAD
+// ══════════════════════════════════════════
 function loadSavedMelodies() {
-  try {
-    const raw = localStorage.getItem('piano_melodies');
-    if (raw) savedMelodies = JSON.parse(raw);
-  } catch(e) { savedMelodies = []; }
-  renderMelodyList();
+  try { savedMelodies = JSON.parse(localStorage.getItem('piano_melodies') || '[]'); }
+  catch(e) { savedMelodies = []; }
+  renderChips();
 }
-
-function persistMelodies() {
+function persist() {
   localStorage.setItem('piano_melodies', JSON.stringify(savedMelodies));
 }
-
-function renderMelodyList() {
+function renderChips() {
   const bottom = document.getElementById('bottom');
-  // remove old chips
   bottom.querySelectorAll('.melody-chip').forEach(c => c.remove());
   savedMelodies.forEach((mel, i) => {
     const chip = document.createElement('div');
     chip.className = 'melody-chip';
-    chip.innerHTML = `${mel.name}<span class="del" data-i="${i}">✕</span>`;
+    chip.innerHTML = `${mel.name}<span class="del" data-i="${i}"> ✕</span>`;
     chip.addEventListener('click', e => {
-      if (e.target.classList.contains('del')) {
-        savedMelodies.splice(i, 1);
-        persistMelodies();
-        renderMelodyList();
-        return;
+      if (e.target.dataset.i !== undefined) {
+        savedMelodies.splice(+e.target.dataset.i, 1);
+        persist(); renderChips(); return;
       }
-      // play this melody
-      initAudio();
+      recordEvents = mel.events;
+      [btnPlay, btnSave, btnMidi].forEach(b => b.classList.remove('disabled'));
       document.querySelectorAll('.melody-chip').forEach(c => c.classList.remove('playing'));
       chip.classList.add('playing');
-      // load into recordEvents so btn-play works
-      recordEvents = mel.events;
-      btnPlay.classList.remove('disabled');
-      btnSave.classList.remove('disabled');
-      btnMidi.classList.remove('disabled');
       playEvents(mel.events);
     });
     bottom.appendChild(chip);
   });
 }
-
+ 
 btnSave.addEventListener('click', () => {
-  if (recordEvents.length === 0) return;
-  const name = prompt('這段旋律要叫什麼？') || ('旋律 ' + (savedMelodies.length + 1));
-  savedMelodies.push({ name, events: [...recordEvents] });
-  persistMelodies();
-  renderMelodyList();
-  setStatus('SAVED', '');
-  setTimeout(() => setStatus('READY', ''), 1500);
+  if (!recordEvents.length) return;
+  const name   = prompt('旋律名稱？') || ('旋律 ' + (savedMelodies.length + 1));
+  const melody = { name, events: [...recordEvents] };
+  savedMelodies.push(melody); persist(); renderChips();
+  const blob = new Blob([JSON.stringify(melody, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name.replace(/\s+/g, '_') + '.json';
+  a.click();
+  setStatus('SAVED'); setTimeout(() => setStatus('READY'), 1500);
 });
-
-// ══════════════════════════════
+ 
+document.getElementById('btn-load').addEventListener('click', () =>
+  document.getElementById('file-input').click());
+ 
+document.getElementById('file-input').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data   = JSON.parse(ev.target.result);
+      const events = Array.isArray(data) ? data : (data.events || data.data);
+      if (!events?.length) throw 0;
+      recordEvents = events;
+      const name = data.name || file.name.replace(/\.json$/, '');
+      savedMelodies.push({ name, events }); persist(); renderChips();
+      [btnPlay, btnSave, btnMidi].forEach(b => b.classList.remove('disabled'));
+      setStatus('LOADED'); setTimeout(() => setStatus('READY'), 1500);
+    } catch { alert('讀取失敗：請確認是從本工具匯出的 JSON 檔'); }
+  };
+  reader.readAsText(file); e.target.value = '';
+});
+ 
+// ══════════════════════════════════════════
 //  MIDI EXPORT
-// ══════════════════════════════
+// ══════════════════════════════════════════
 function toVarLen(v) {
   const b = [v & 0x7F];
   while (v >>= 7) b.push((v & 0x7F) | 0x80);
   return b.reverse();
 }
 function toI32(n) { return [(n>>24)&0xff,(n>>16)&0xff,(n>>8)&0xff,n&0xff]; }
-
+ 
 function buildMidi(events) {
-  // header: format 0, 1 track, 480 ticks/beat
   const header = [0x4D,0x54,0x68,0x64,0,0,0,6,0,0,0,1,0x01,0xE0];
-  let track = [];
-  let last = 0;
+  let track = [], last = 0;
   events.forEach(ev => {
     const delta = Math.max(0, Math.floor((ev.time - last) * 480 / 1000));
     last = ev.time;
-    track.push(...toVarLen(delta));
-    track.push(ev.type === 'on' ? 0x90 : 0x80, ev.midi, ev.type === 'on' ? 100 : 0);
+    track.push(...toVarLen(delta), ev.type==='on' ? 0x90 : 0x80, ev.midi, ev.type==='on' ? 100 : 0);
   });
   track.push(0x00, 0xFF, 0x2F, 0x00);
-  const tHead = [0x4D,0x54,0x72,0x6B,...toI32(track.length)];
-  return new Uint8Array([...header,...tHead,...track]);
+  return new Uint8Array([...header, 0x4D,0x54,0x72,0x6B,...toI32(track.length),...track]);
 }
-
+ 
 btnMidi.addEventListener('click', () => {
-  if (recordEvents.length === 0) return;
-  const bytes = buildMidi(recordEvents);
-  const blob  = new Blob([bytes], { type: 'audio/midi' });
-  const a     = document.createElement('a');
-  a.href      = URL.createObjectURL(blob);
-  a.download  = `piano_${Date.now()}.mid`;
-  a.click();
+  if (!recordEvents.length) return;
+  const blob = new Blob([buildMidi(recordEvents)], { type: 'audio/midi' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `piano_${Date.now()}.mid`; a.click();
 });
-
-// ══════════════════════════════
-//  LOAD FILE (JSON or MIDI-as-JSON)
-// ══════════════════════════════
-document.getElementById('btn-load').addEventListener('click', () => {
-  document.getElementById('file-input').click();
-});
-
-document.getElementById('file-input').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      // support both {events:[...]} and flat array
-      const events = Array.isArray(data) ? data : (data.events || data.data);
-      if (!events || !events.length) throw new Error('no events');
-      recordEvents = events;
-      const name = data.name || file.name.replace(/\.json$/,'');
-      savedMelodies.push({ name, events });
-      persistMelodies();
-      renderMelodyList();
-      btnPlay.classList.remove('disabled');
-      btnSave.classList.remove('disabled');
-      btnMidi.classList.remove('disabled');
-      setStatus('LOADED', '');
-      setTimeout(() => setStatus('READY',''), 1500);
-    } catch(err) {
-      alert('讀取失敗：請確認是從本工具匯出的 JSON 檔');
-    }
-  };
-  reader.readAsText(file);
-  e.target.value = ''; // reset so same file can be re-loaded
-});
-
-// ══════════════════════════════
-//  ALSO: export JSON (from save)
-//  Add a hidden JSON export on long-press or modify btn-save
-//  For simplicity: btn-save saves to localStorage + downloads JSON
-// ══════════════════════════════
-// Override save to also download JSON
-const origSave = btnSave.onclick;
-btnSave.onclick = null;
-btnSave.addEventListener('click', () => {
-  if (recordEvents.length === 0) return;
-  const name   = prompt('旋律名稱？') || ('旋律 ' + (savedMelodies.length + 1));
-  const melody = { name, events: [...recordEvents] };
-  savedMelodies.push(melody);
-  persistMelodies();
-  renderMelodyList();
-
-  // also download JSON so it can be re-loaded cross-device
-  const blob = new Blob([JSON.stringify(melody, null, 2)], {type:'application/json'});
-  const a    = document.createElement('a');
-  a.href     = URL.createObjectURL(blob);
-  a.download = name.replace(/\s+/g,'_') + '.json';
-  a.click();
-
-  setStatus('SAVED', '');
-  setTimeout(() => setStatus('READY', ''), 1500);
-}, {once: false});
-
-// ══════════════════════════════
+ 
+// ══════════════════════════════════════════
 //  INIT
-// ══════════════════════════════
+// ══════════════════════════════════════════
 loadSavedMelodies();
 </script>
 </body>
