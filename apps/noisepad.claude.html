@@ -1,178 +1,160 @@
 <!DOCTYPE html>
 <!--
-# Noisepad — 開發筆記
+================================================================================
+  NOISEPAD — 開發筆記 v2
+================================================================================
 
-> 版本：v2（重構版）  
-> 格式：單一 `.html` 檔案，無後端，無外部資料  
-> 外部依賴：Tone.js 14.8.49（CDN）、Google Fonts（Share Tech Mono + Rajdhani）
+  版本：v2（重構版）
+  格式：單一 .html 檔案，無後端，無外部資料
+  外部依賴：Tone.js 14.8.49（CDN）、Google Fonts（Share Tech Mono + Rajdhani）
 
----
+────────────────────────────────────────────────────────────────────────────────
+一、這是什麼？
+────────────────────────────────────────────────────────────────────────────────
+  Noisepad 是一個跑在瀏覽器裡的矩陣音序器（Matrix Sequencer），
+  靈感來自 Yamaha TENORI-ON。
 
-## 一、這是什麼？
+  掃描線從左到右不斷循環，掃到被點亮的格子就觸發聲音。
+  橫軸 = 時間（節拍），縱軸 = 音高 or 鼓組。
+  不需要安裝，存成 .html 用瀏覽器開就能玩。
 
-Noisepad 是一個跑在瀏覽器裡的**矩陣音序器（Matrix Sequencer）**，靈感來自 Yamaha TENORI-ON。
+────────────────────────────────────────────────────────────────────────────────
+二、功能清單
+────────────────────────────────────────────────────────────────────────────────
 
-一條掃描線從左到右不斷循環，掃到被點亮的格子就觸發聲音。橫軸代表時間（節拍），縱軸代表音高（或鼓組音色）。不需要任何安裝，存成 `.html` 用瀏覽器開就能玩。
+  【網格 PAD】
+  - 初始尺寸：12×12（相容 3/4 拍與 4/4 拍）
+  - 最大尺寸：36×36 / 最小尺寸：12×12（下限）
+  - 左側 ▲▼ 按鈕往高/低音方向加減列數
+  - PAD 下方 +/- 加減行數
+  - 格子寬高自動計算（畫布 ÷ 格數），永遠填滿容器，不出現捲軸
+  - 滑鼠點擊 / 觸控點擊 切換格子開關
+  - 按住拖曳可連續畫（滑鼠與觸控皆支援）
 
----
+  【音高系統】
+  - 基準音：C3（MIDI 48，261.63 Hz），在網格中央，視覺特別標示
+  - 每列左側顯示真實音名（C3、D4、G#2 等），隨音階切換即時更新
+  - C3 用亮藍色標示；其他八度的 C 用較淡顏色標示，作為視覺導航
+  - 音階切換：全音階（12 半音）/ 白鍵（C Major 7 音）/ 五聲（CDEGA 5 音）
+  - 往上擴展 = 高音；往下擴展 = 低音
 
-## 二、功能清單
+  【音色系統（全部合成，不用音檔）】
+  - ∿ Sine    → OscillatorNode sine，有衰減包絡
+  - ⊓ Square  → OscillatorNode square，復古電玩感
+  - ● Kick    → 正弦波 160Hz→40Hz 頻率滑落 + 音量衰減
+  - ≋ Snare   → 白雜訊 + BandPass 濾波（2000Hz）
+  - × Hi-hat  → 白雜訊 + HighPass 濾波（8000Hz）+ 極短衰減
+  - 每列獨立設定，點列左側小圖示彈出浮動選單，選完自動收起
 
-### 🎛️ 網格（PAD）
-| 項目 | 說明 |
-|------|------|
-| 初始尺寸 | 12×12（相容 3/4 拍與 4/4 拍） |
-| 最大尺寸 | 36×36 |
-| 最小尺寸 | 12×12（下限，無法再縮減） |
-| 擴展方式 | 左側 ▲▼ 按鈕往高/低音方向加列；PAD 下方 +/- 加減行數 |
-| 格子縮放 | 格子寬高自動計算（畫布尺寸 ÷ 格數），永遠填滿容器，不出現捲軸 |
-| 點擊 | 滑鼠點擊 or 觸控點擊切換格子開/關 |
-| 拖曳 | 按住拖曳可連續畫格子（滑鼠與觸控皆支援） |
+  【節奏控制】
+  - BPM：頂部 −(120)+ 按鈕，每次 ±5，範圍 40–240
+  - Tone.js Transport scheduleRepeat('16n') 確保節拍精準
+  - 底部步驟指示點，每四格有一個較大的拍點提示
 
-### 🎵 音高系統
-| 項目 | 說明 |
-|------|------|
-| 基準音 | C3（MIDI 48，261.63 Hz），在網格中央，視覺特別標示 |
-| 音名顯示 | 每列左側顯示真實音名（C3、D4、G#2 等），隨音階切換即時更新 |
-| C 音標記 | C3 用亮藍色標示；其他八度的 C（C2、C4...）用較淡的顏色標示，作為視覺導航 |
-| 音階切換 | 全音階（Chromatic 12 半音）/ 白鍵（C Major 7 音）/ 五聲音階（CDEGA 5 音） |
-| 音高映射 | 往上擴展 = 高音；往下擴展 = 低音；切換音階時音名標籤即時重新計算 |
+  【存檔系統】
+  - 自動存檔：每次修改自動寫入 localStorage
+  - 匯出 JSON：完整狀態存成 .json 下載
+  - 匯入 JSON：讀取 .json 完整還原狀態
 
-### 🥁 音色系統
-| 符號 | 音色 | 合成方式 |
-|------|------|---------|
-| ∿ | Sine（正弦波） | OscillatorNode，type = sine，有衰減包絡 |
-| ⊓ | Square（方波） | OscillatorNode，type = square，復古電玩感 |
-| ● | Kick（大鼓） | 正弦波 160Hz → 40Hz 頻率滑落 + 快速音量衰減 |
-| ≋ | Snare（小鼓） | 白雜訊 + BandPass 濾波器（2000Hz）+ 衰減 |
-| × | Hi-hat（鈸） | 白雜訊 + HighPass 濾波器（8000Hz）+ 極短衰減 |
+  【快捷鍵】
+  - 空白鍵：播放 / 停止
 
-每一列可以獨立設定音色，點列左側的小圖示就會彈出浮動選單，選完自動收起。
+────────────────────────────────────────────────────────────────────────────────
+三、版面設計邏輯
+────────────────────────────────────────────────────────────────────────────────
 
-> 全部用 Web Audio API 純數學合成，**不需要任何音檔**。
+  ┌─────────────────────────────────────┐
+  │  LOGO  │  BPM  │  音階  │  PLAY     │  ← 頂部控制列（最窄）
+  ├──┬──┬──────────────────────────┬────┤
+  │  │音│                          │    │
+  │▲▼│名│      C A N V A S         │    │
+  │  │音│         PAD              │    │  ← 主角區
+  │行│色│                          │    │
+  │列│箭│                          │    │
+  │鈕│頭│                          │    │
+  ├──┴──┴──────────────────────────┴────┤
+  │           (PAD 下方) COL  −12+      │  ← 行數控制
+  ├─────────────────────────────────────┤
+  │  ●●●●●●●●●●●●  │ CLR EXP IMP      │  ← 底部狀態列（最窄）
+  └─────────────────────────────────────┘
 
-### ⏱️ 節奏控制
-- **BPM**：頂部 `−(120)+` 按鈕，每次加減 5 BPM，範圍 40–240
-- **Tone.js Transport**：使用 `scheduleRepeat('16n')` 確保節拍精準，不會因為 JS 主線程阻塞而漂移
-- **步驟指示點**：底部顯示目前掃描到第幾格，每四格有一個較大的拍點提示
+  設計原則：PAD 是絕對主角，所有控制項都塞邊緣。
 
-### 💾 存檔系統
-- **自動存檔**：每次修改（點格子、調整設定）都會自動寫入 `localStorage`，重整網頁不會遺失進度
-- **匯出 JSON**：把完整狀態（格數、BPM、音色、點擊位置）存成 `.json` 檔案下載
-- **匯入 JSON**：讀取之前匯出的 `.json` 檔案，完整還原狀態
+────────────────────────────────────────────────────────────────────────────────
+四、技術架構
+────────────────────────────────────────────────────────────────────────────────
 
-### ⌨️ 快捷鍵
-- **空白鍵**：播放 / 停止
+  【繪圖】
+  - HTML5 Canvas API，每次狀態改變呼叫 drawGrid() 重繪
+  - 支援 devicePixelRatio（Retina / HiDPI 螢幕）
+  - cellWidth = canvasWidth / cols，cellHeight = canvasHeight / rows
 
----
+  【音訊】
+  - Tone.js：精準 BPM 時鐘（Tone.Transport）
+  - Web Audio API 原生：OscillatorNode / GainNode / BiquadFilterNode / AudioBufferSourceNode
+  - AudioContext 必須由使用者互動觸發（瀏覽器政策），所以有啟動遮罩
 
-## 三、版面設計邏輯
+  【狀態結構】
+  state = {
+    cols, rows,          // 目前網格大小
+    c3Index,             // C3 在第幾列（由上往下）
+    bpm, scale,          // 節奏 / 音階
+    isPlaying,
+    currentStep,         // 掃描線目前位置
+    gridData[col][row],  // 二維布林陣列
+    rowTimbre[row],      // 每列音色
+  }
 
-```
-┌─────────────────────────────────────┐
-│  LOGO  │  BPM  │  音階  │  PLAY     │  ← 頂部控制列（最窄）
-├──┬──┬──────────────────────────┬────┤
-│  │音│                          │    │
-│▲▼│名│      C A N V A S         │    │
-│  │音│         PAD              │    │  ← 主角區
-│行│色│                          │    │
-│列│箭│                          │    │
-│鈕│頭│                          │    │
-├──┴──┴──────────────────────────┴────┤
-│           (PAD 下方) COL  −12+      │  ← 行數控制
-├─────────────────────────────────────┤
-│  ●●●●●●●●●●●●  │ CLR EXP IMP      │  ← 底部狀態列（最窄）
-└─────────────────────────────────────┘
-```
+  【音高計算】
+  rowToMidi(rowIdx):
+    1. distFromC3 = c3Index - rowIdx
+    2. octave = floor(dist / scaleLength)
+    3. step = dist % scaleLength
+    4. semitone = scale[step]
+    5. MIDI = 48 + octave*12 + semitone  （C3 = 48）
 
-**設計原則：PAD 是絕對主角，所有控制項都塞邊緣。**
+────────────────────────────────────────────────────────────────────────────────
+五、視覺設計
+────────────────────────────────────────────────────────────────────────────────
 
----
+  主色調：深黑 #0a0a0f，青藍強調 #00e5ff
+  字型：Share Tech Mono（數字/Logo）+ Rajdhani（UI 文字）
+  鼓聲配色：Kick 橘 #ff6b35 / Snare 紅 #ff3366 / Hi-hat 黃 #ffe066 / Square 紫 #aa44ff
+  格子發光：啟用格子有 shadowBlur，類 LED 質感
+  C3 標示：亮藍色行背景 + 邊框加亮，視覺錨點清楚
 
-## 四、技術架構
+────────────────────────────────────────────────────────────────────────────────
+六、HTML 內部結構
+────────────────────────────────────────────────────────────────────────────────
 
-### 繪圖
-- 使用 **HTML5 Canvas API** 繪製網格
-- 每次狀態改變都呼叫 `drawGrid()` 重繪整張畫布
-- 支援 `devicePixelRatio` 高解析度螢幕（Retina / HiDPI）
-- 格子大小公式：`cellWidth = canvasWidth / cols`，`cellHeight = canvasHeight / rows`
+  #overlay          → 啟動遮罩（等待使用者互動解鎖 AudioContext）
+  #timbre-popup     → 音色浮動選單（點列左側箭頭觸發）
+  #topbar           → 頂部控制列：Logo / BPM / 音階 / Play
+  #main             → 主要佈局容器（flex row）
+    #left-sidebar   → 左側列增減按鈕（▲▼ 高音/低音方向）
+    #row-labels     → 音名標籤 + 音色小箭頭（每列一格）
+    #pad-wrap       → PAD 主區
+      #canvas-container → Canvas 容器（flex 撐滿）
+      canvas#grid   → 實際繪圖的 Canvas
+      #col-strip    → 行數 +/- 控制（PAD 正下方）
+  #bottombar        → 底部：步驟點 / CLR / EXP / IMP
 
-### 音訊
-- **Tone.js**：負責精準的 BPM 時鐘（`Tone.Transport`）
-- **Web Audio API（原生）**：負責實際的音訊合成（`OscillatorNode`、`GainNode`、`BiquadFilterNode`、`AudioBufferSourceNode`）
-- 音訊上下文必須由使用者互動觸發（瀏覽器政策），所以有啟動遮罩
+────────────────────────────────────────────────────────────────────────────────
+七、已知限制 & 未來可加的功能
+────────────────────────────────────────────────────────────────────────────────
 
-### 狀態管理
-```
-state = {
-  cols,           // 行數
-  rows,           // 列數
-  c3Index,        // C3 在第幾列（由上往下數）
-  bpm,
-  scale,          // 'chromatic' | 'major' | 'pentatonic'
-  isPlaying,
-  currentStep,    // 掃描線目前在第幾行
-  gridData[col][row],  // 二維布林陣列
-  rowTimbre[row], // 每列音色
-}
-```
+  已知限制：
+  - 格子縮很小（接近 36 列）時，手機觸控精確度下降，建議平板或滑鼠
 
-### 音高計算
-```
-rowToMidi(rowIdx):
-  1. 計算該列距離 c3Index 的音階步數（distFromC3）
-  2. 換算八度（octave = floor(dist / scaleLength)）
-  3. 找出當前音階的音程（semitone = scale[step]）
-  4. MIDI = 48 + octave*12 + semitone  （C3 = 48）
-```
+  未來可加：
+  - [ ] 多組存檔切換（目前只有一組 localStorage + 匯出）
+  - [ ] 每列音量控制（velocity）
+  - [ ] 殘響 / 延遲效果器（Reverb / Delay）
+  - [ ] 匯出音訊（OfflineContext 渲染成 .wav）
+  - [ ] 手機橫式 / 直式自動切換版面
 
----
-
-## 五、設計風格
-
-- **主色調**：深黑背景 `#0a0a0f`，青藍色強調 `#00e5ff`
-- **字型**：`Share Tech Mono`（數字 / Logo）+ `Rajdhani`（UI 文字）
-- **鼓聲配色**：Kick 橘 `#ff6b35`、Snare 紅 `#ff3366`、Hi-hat 黃 `#ffe066`、Square 紫 `#aa44ff`
-- **格子發光**：啟用的格子有 `shadowBlur` 發光效果，視覺上有類 LED 的質感
-- **C3 標示**：亮藍色行背景 + 整列邊框加亮，視覺錨點清楚
-
----
-
-## 六、已知限制與未來可加的功能
-
-### 已知限制
-- 格子縮到很小（接近 36 列）時，手機觸控精確度下降，建議用平板或滑鼠
-- 匯入 JSON 時如果格數比目前大，會直接擴展（無動畫）
-
-### 未來可以加的功能
-- [ ] 多組存檔切換（目前只有一組 localStorage + 匯出）
-- [ ] 每列音量控制（velocity）
-- [ ] 鋼琴捲軸側邊（Piano Roll 視覺輔助）
-- [ ] 殘響 / 延遲效果器（Reverb / Delay）
-- [ ] 匯出音訊（Web Audio OfflineContext 渲染成 .wav）
-- [ ] 手機橫式 / 直式自動切換版面
-
----
-
-## 七、HTML 內部結構註解對照
-
-```
-#overlay          → 啟動遮罩（等待使用者互動以解鎖 AudioContext）
-#timbre-popup     → 音色浮動選單（點列左側箭頭觸發）
-#topbar           → 頂部控制列：Logo / BPM / 音階 / Play
-#main             → 主要佈局容器（flex row）
-  #left-sidebar   → 左側列增減按鈕（▲▼ for 高音/低音方向）
-  #row-labels     → 音名標籤 + 音色小箭頭（每列一格）
-  #pad-wrap       → PAD 主區
-    #canvas-container → Canvas 容器（flex 撐滿）
-    canvas#grid   → 實際繪圖的 Canvas
-    #col-strip    → 行數 +/- 控制（PAD 正下方）
-#bottombar        → 底部：步驟點 / CLR / EXP / IMP
-```
-
----
-
-*最後更新：2026-03*
+  最後更新：2026-03
+================================================================================
 -->
 <html lang="zh-TW">
 <head>
@@ -702,11 +684,17 @@ function isC3(rowIdx) { return rowIdx === state.c3Index; }
 // ─────────────────────────────────────────────
 let audioReady = false;
 let scheduleId = null;
+let masterGain = null;
 
 async function initAudio() {
   await Tone.start();
   Tone.Transport.bpm.value = state.bpm;
   Tone.Transport.scheduleRepeat(tick, '16n');
+  // Master gain — 統一拉高整體音量
+  const rawCtx = Tone.context.rawContext;
+  masterGain = rawCtx.createGain();
+  masterGain.gain.value = 3.0;
+  masterGain.connect(rawCtx.destination);
   audioReady = true;
 }
 
@@ -725,21 +713,22 @@ function tick(time) {
 function triggerSound(rowIdx, time) {
   const timbre = state.rowTimbre[rowIdx] || 'sine';
   const ctx = Tone.context.rawContext;
+  const out = masterGain || ctx.destination; // 接到 master gain
 
   if (timbre === 'kick') {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(160, time);
-    osc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
-    gain.gain.setValueAtTime(1.2, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(time); osc.stop(time + 0.31);
+    osc.frequency.setValueAtTime(180, time);
+    osc.frequency.exponentialRampToValueAtTime(40, time + 0.15);
+    gain.gain.setValueAtTime(1.5, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
+    osc.connect(gain); gain.connect(out);
+    osc.start(time); osc.stop(time + 0.36);
     return;
   }
   if (timbre === 'snare') {
-    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.25, ctx.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     const src = ctx.createBufferSource();
@@ -747,16 +736,16 @@ function triggerSound(rowIdx, time) {
     const gain = ctx.createGain();
     src.buffer = buf;
     filt.type = 'bandpass';
-    filt.frequency.value = 2000;
-    filt.Q.value = 0.5;
-    gain.gain.setValueAtTime(0.8, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
-    src.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
-    src.start(time); src.stop(time + 0.2);
+    filt.frequency.value = 2200;
+    filt.Q.value = 0.4;
+    gain.gain.setValueAtTime(1.2, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+    src.connect(filt); filt.connect(gain); gain.connect(out);
+    src.start(time); src.stop(time + 0.25);
     return;
   }
   if (timbre === 'hihat') {
-    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     const src = ctx.createBufferSource();
@@ -764,24 +753,26 @@ function triggerSound(rowIdx, time) {
     const gain = ctx.createGain();
     src.buffer = buf;
     filt.type = 'highpass';
-    filt.frequency.value = 8000;
-    gain.gain.setValueAtTime(0.5, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.07);
-    src.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
-    src.start(time); src.stop(time + 0.08);
+    filt.frequency.value = 7000;
+    gain.gain.setValueAtTime(1.0, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.09);
+    src.connect(filt); filt.connect(gain); gain.connect(out);
+    src.start(time); src.stop(time + 0.1);
     return;
   }
-  // Pitched synth
+  // Pitched synth (sine / square)
   const midi = rowToMidi(rowIdx);
   const freq = midiToFreq(midi);
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = timbre; // 'sine' or 'square'
+  osc.type = timbre;
   osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.35, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
-  osc.connect(gain); gain.connect(ctx.destination);
-  osc.start(time); osc.stop(time + 0.41);
+  // square wave 天生比 sine 響，稍微壓一點
+  const peakGain = timbre === 'square' ? 0.6 : 0.9;
+  gain.gain.setValueAtTime(peakGain, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+  osc.connect(gain); gain.connect(out);
+  osc.start(time); osc.stop(time + 0.51);
 }
 
 // ─────────────────────────────────────────────
