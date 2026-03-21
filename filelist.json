@@ -3,6 +3,8 @@
 ,
 {"path": "apps/jp01.claude.html", "title": "五十音練習"}
 ,
+{"path": "apps/noisepad.claude.html", "title": "Noisepad"}
+,
 {"path": "apps/pi-noise-1.html", "title": "π noise"}
 ,
 {"path": "apps/piano.claude.html", "title": "PIANO"}
