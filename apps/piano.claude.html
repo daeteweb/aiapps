@@ -4,38 +4,38 @@
   最後更新：2026-03-20
   版本：v3（手機橫屏修正版）
 ================================================================================
- 
+
 ## 專案概述
   單一 HTML 檔案的趣味鋼琴模擬器。
   目標：好玩、輕量、能彈、能錄、能匯出 MIDI 當鈴聲。
   不追求精確，有 lag 無所謂，能聽出旋律就夠。
- 
+
 --------------------------------------------------------------------------------
 ## 技術選擇
- 
+
   音訊引擎   → Web Audio API（原生 JS，無外部 library）
                使用 OscillatorNode，波形：triangle（較柔和）
                頻率公式：freq = 440 * 2^((midi - 69) / 12)
- 
+
   儲存方案   → localStorage（瀏覽器內暫存旋律清單）
                + JSON 下載（跨裝置備份，可重新載入）
- 
+
   MIDI 匯出  → 純 JS 手寫二進位（Uint8Array）
                格式：Standard MIDI File Format 0，480 ticks/beat
                結構：MThd header → MTrk track → Delta-time + NoteOn/NoteOff events
- 
+
   不使用     → Tone.js 或其他外部音訊 library（維持單檔輕量）
                IndexedDB（localStorage 對這個規模已夠用）
- 
+
 --------------------------------------------------------------------------------
 ## 介面設計
- 
+
   方向       → 強制橫向（Landscape），空間最大化
   風格       → 黑底暖金，仿真鋼琴質感
                白鍵：米白漸層，按壓後轉金色
                黑鍵：深灰漸層，按壓後轉橘棕色
   字型       → DM Mono（控制列）+ Playfair Display（音名顯示）
- 
+
   佈局（上到下）：
     1. 頂部控制列  — 分兩行：第一行八度切換＋狀態；第二行功能按鈕
                      手機上這樣排才不會擠壓
@@ -43,45 +43,45 @@
     3. 鋼琴主體    — 琴鍵區，黑鍵用 absolute 疊在白鍵之上
                      鍵盤高度用 CSS flex:1 撐滿剩餘空間，不用 JS 算死
     4. 底部清單    — 已儲存旋律的標籤列，點擊播放
- 
+
 --------------------------------------------------------------------------------
 ## 鍵盤範圍（22 個音）
- 
+
   左側延伸（3白2黑）：G3 G#3 A3 A#3 B3
   中間完整八度        ：C4 C#4 D4 D#4 E4 F4 F#4 G4 G#4 A4 A#4 B4
   右側延伸（3白2黑）  ：C5 C#5 D5 D#5 E5
- 
+
   白鍵寬度計算（JS）：Math.floor(screen.longEdge / 白鍵數量)，用螢幕長邊確保橫屏正確
   黑鍵定位（JS）    ：leftWhiteIdx * WW + WW - BW/2
                       用「左邊白鍵數量」推算，不用手動硬編 offset
- 
+
 --------------------------------------------------------------------------------
 ## PC 鍵盤對應
- 
+
   白鍵（下排）：Z X C  V B N M , . /  Q W E
   黑鍵（上排）：S=G#3  D=A#3  G=C#4  H=D#4  J=F#4  K=G#4  L=A#4  2=C#5  3=D#5
- 
+
 --------------------------------------------------------------------------------
 ## 八度切換
- 
+
   按鈕：低八度（-8va）／ 標準 ／ 高八度（+8va）
   實作：octaveOffset = -12 / 0 / +12
         實際 midi = baseMidi + octaveOffset
         切換時強制 releaseAll() 防止殘音
- 
+
 --------------------------------------------------------------------------------
 ## 錄音邏輯（即時錄製）
- 
+
   格式：事件陣列 [{type:'on'|'off', midi, time}]
         time = Date.now() - recordStart（毫秒，相對時間）
   播放：用 setTimeout 依序觸發，不精確但夠用
   儲存：localStorage key = 'piano_melodies'，陣列格式
   備份：儲存時同步下載 .json 檔（可跨裝置讀取）
   載入：讀取 JSON 檔，支援 {name, events:[...]} 格式
- 
+
 --------------------------------------------------------------------------------
 ## MIDI 匯出格式
- 
+
   檔名：piano_<timestamp>.mid
   結構：
     MThd: 4D 54 68 64 | 00 00 00 06 | 00 00 | 00 01 | 01 E0
@@ -89,10 +89,10 @@
     Events: [VarLen delta-time] [0x90/0x80] [midi note] [velocity 100/0]
     End: 00 FF 2F 00
   Delta time 計算：Math.floor((ev.time - lastTime) * 480 / 1000)
- 
+
 --------------------------------------------------------------------------------
 ## 防卡鍵機制
- 
+
   問題根源：mouseup / touchend 綁在琴鍵本身，手指滑出範圍就收不到放開事件
   解法：
     1. window mouseup / blur          → releaseAll()（滑鼠用）
@@ -103,40 +103,54 @@
     4. pressedBase (Set)              → 追蹤目前按下的 baseMidi（滑鼠/鍵盤）
        touchIdMap (Map)               → touchId → baseMidi，多點觸控對應表
        activeOscs (Object)            → midi → {osc, gain}
- 
+
   手機多點觸控流程：
     touchstart → 記錄 touch.identifier → baseMidi 到 touchIdMap
     touchend   → 從 changedTouches 取 identifier → 查 touchIdMap → noteOff 對應音
     touchcancel→ 同上，確保意外中斷也能釋放
- 
+
 --------------------------------------------------------------------------------
-## 音訊節點結構（每個音）
- 
-  OscillatorNode → GainNode → AudioContext.destination
-  Note On  : gain linearRamp 0 → 0.32 in 12ms（防爆音）
-  Note Off : gain setTargetAtTime → 0, timeConstant=0.025（快速淡出）
-             setTimeout 130ms 後 osc.stop()
- 
+## 音訊節點結構（每個音，v3.2 升級）
+
+  音色設計（3 振盪器疊加）：
+    Osc1: triangle × 1.0 倍頻，gain 0.7  → 基音主體
+    Osc2: sine    × 2.0 倍頻，gain 0.18 → 2次諧波，加亮度
+    Osc3: sine    × 3.0 倍頻，gain 0.07 → 3次諧波，加色彩
+    → 各 osc 接各自 GainNode → 共用 envGain → DynamicsCompressor → destination
+
+  ADSR 包絡（envGain）：
+    Attack  : 0 → 0.85，8ms linearRamp（快速起音）
+    Decay   : 0.85 → 0.65，60ms（自然衰減到 sustain）
+    Sustain : 0.65（按住期間維持）
+    Release : setTargetAtTime → 0，timeConstant=0.04（放開後 ~120ms 淡出）
+
+  DynamicsCompressor（全局共用，initAudio 時建立一次）：
+    threshold -12dB / knee 8 / ratio 4:1 / attack 3ms / release 150ms
+    作用：多音同時按時防止爆音，並讓整體感知響度提升約 2 倍
+
+  改善前（v3.0）：單一 triangle osc，gain 0.32 → 感知響度低、音色悶
+  改善後（v3.2）：3 osc 諧波合成 + compressor → 明顯響亮、有鋼琴感
+
 --------------------------------------------------------------------------------
 ## 手機版修正重點（v3 新增）
- 
+
   問題1：鍵盤高度爆出畫面
     原因：JS 用 window.innerHeight * 0.6 在頁面載入時算死，
           手機橫屏時 innerHeight 是短邊（約 390px），算出來的鍵太高
     修法：鍵盤容器改用 CSS flex:1 自動撐滿剩餘高度；
           白鍵高度改用 CSS height:100%，完全交給 flexbox 管理；
           黑鍵高度改用 CSS height:60%，相對白鍵自動縮放
- 
+
   問題2：topbar 按鈕在手機上擠壓換行
     原因：按鈕太多（7個），手機橫屏寬度不夠放成一行
     修法：topbar 改為兩行，第一行放八度切換＋狀態，第二行放功能按鈕
           按鈕文字縮短，padding 減小
- 
+
   問題3：多點觸控 releaseAll() 誤殺其他音
     原因：touchend 直接 releaseAll()，多指彈奏時放開一根手指會把全部音停掉
     修法：改用 changedTouches + touchIdMap (Map) 精確對應每根手指與其音符
           只有 mouseup / blur 才呼叫 releaseAll()
- 
+
   問題4（v3.1）：手機上控制列按鈕按了沒反應
     原因：* { touch-action:none } 全域設定導致手機瀏覽器不觸發 click 事件
     修法：
@@ -148,11 +162,11 @@
          確保不會把事件冒泡到 window 的 releaseAll()
       c. 所有控制列按鈕（REC、播放、儲存、MIDI、載入、八度）
          全部改用 addBtnListener 取代原本的 addEventListener('click')
- 
+
   白鍵寬度計算改用 window.screen 的長邊
     原因：window.innerWidth 在部分手機橫屏時可能回傳錯誤值
     修法：取 Math.max(screen.width, screen.height) 確保永遠是長邊
- 
+
 ================================================================================
 -->
 <!DOCTYPE html>
@@ -163,7 +177,7 @@
 <title>PIANO</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700&display=swap');
- 
+
   :root {
     --bg:               #0e0e0e;
     --panel:            #171717;
@@ -179,7 +193,7 @@
     --text-dim:         #666;
     --red:              #e05c5c;
   }
- 
+
   * {
     box-sizing: border-box;
     margin: 0; padding: 0;
@@ -189,7 +203,7 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
   }
- 
+
   /* 控制列的按鈕、topbar、bottom 需要恢復 touch-action:auto
      否則手機的 click 事件不會觸發 */
   #topbar, #topbar-row1, #topbar-row2,
@@ -197,12 +211,12 @@
   #bottom, #bottom-label, .melody-chip {
     touch-action: auto;
   }
- 
+
   html, body {
     width: 100%; height: 100%;
     overflow: hidden;
   }
- 
+
   body {
     background: var(--bg);
     color: var(--text);
@@ -213,7 +227,7 @@
     padding-right:  env(safe-area-inset-right);
     padding-bottom: env(safe-area-inset-bottom);
   }
- 
+
   /* ── TOP BAR：兩行 ── */
   #topbar {
     flex-shrink: 0;
@@ -230,7 +244,7 @@
   }
   #topbar-row1 { border-bottom: 1px solid var(--border); }
   #topbar-row2 { justify-content: flex-end; }
- 
+
   .oct-btn {
     background: var(--panel2);
     color: var(--text-dim);
@@ -248,7 +262,7 @@
     border-color: var(--accent);
     font-weight: 500;
   }
- 
+
   #status {
     font-size: 0.65em;
     color: var(--text-dim);
@@ -260,7 +274,7 @@
   #status.rec  { color: var(--red);     animation: blink 1s step-start infinite; }
   #status.play { color: var(--accent2); }
   @keyframes blink { 50% { opacity: 0.3; } }
- 
+
   .action-btn {
     background: var(--panel2);
     color: var(--text);
@@ -277,7 +291,7 @@
   .action-btn.rec-active { border-color: var(--red);  color: var(--red); }
   .action-btn.disabled   { opacity: 0.28; pointer-events: none; }
   #file-input { display: none; }
- 
+
   /* ── NOTE DISPLAY ── */
   #note-display {
     flex-shrink: 0;
@@ -313,7 +327,7 @@
     transition: background 0.1s;
   }
   .rec-dot.lit { background: var(--accent); }
- 
+
   /* ── PIANO STAGE ── */
   #stage {
     flex: 1;                   /* 撐滿剩餘高度 */
@@ -333,7 +347,7 @@
     background: linear-gradient(to bottom, #2a1f0e, #1a1208);
     border-bottom: 1px solid #3d2b10;
   }
- 
+
   /* ── KEYBOARD ── */
   #keyboard {
     position: relative;
@@ -341,7 +355,7 @@
     align-items: flex-start;
     /* 寬度由 JS 設定；高度由父層 stretch 決定 */
   }
- 
+
   /* 白鍵：height 100% 由 flexbox 決定，不寫死數值 */
   .wk {
     position: relative;
@@ -370,7 +384,7 @@
     color: #a09080;
     pointer-events: none;
   }
- 
+
   /* 黑鍵：height 60% 相對白鍵自動縮放 */
   .bk {
     position: absolute;
@@ -390,7 +404,7 @@
     transform: translateY(1px);
     box-shadow: 1px 2px 4px rgba(0,0,0,0.8);
   }
- 
+
   /* ── BOTTOM LIST ── */
   #bottom {
     flex-shrink: 0;
@@ -434,7 +448,7 @@
 </style>
 </head>
 <body>
- 
+
 <!-- TOP BAR -->
 <div id="topbar">
   <div id="topbar-row1">
@@ -452,7 +466,7 @@
     <input type="file" id="file-input" accept=".json">
   </div>
 </div>
- 
+
 <!-- NOTE DISPLAY -->
 <div id="note-display">
   <div id="note-label">—</div>
@@ -464,17 +478,17 @@
     <div class="rec-dot" id="rd6"></div><div class="rec-dot" id="rd7"></div>
   </div>
 </div>
- 
+
 <!-- PIANO -->
 <div id="stage">
   <div id="keyboard"></div>
 </div>
- 
+
 <!-- SAVED LIST -->
 <div id="bottom">
   <span id="bottom-label">已儲存</span>
 </div>
- 
+
 <script>
 // ══════════════════════════════════════════
 //  NOTE LAYOUT  [name, isBlack, midiNum]
@@ -494,7 +508,7 @@ const NOTE_LAYOUT = [
   ['D5',false,74],['D#5',true,75],
   ['E5',false,76],
 ];
- 
+
 const KEY_MAP = {
   'z':55,'s':56,'x':57,'d':58,'c':59,
   'v':60,'g':61,'b':62,'h':63,'n':64,
@@ -502,7 +516,7 @@ const KEY_MAP = {
   'l':70,'/':71,
   'q':72,'2':73,'w':74,'3':75,'e':76
 };
- 
+
 // ══════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════
@@ -517,60 +531,103 @@ let pressedBase   = new Set();  // 滑鼠/鍵盤目前按下的 baseMidi
 let touchIdMap    = new Map();  // touchIdentifier → baseMidi（多點觸控）
 let savedMelodies = [];
 let playbackTimers = [];
- 
+
 // ══════════════════════════════════════════
 //  AUDIO
+//  音色設計：
+//  - 3 個振盪器疊加（基音 + 2、3 次諧波）模擬鋼琴泛音
+//  - 每個音用獨立 GainNode 控制諧波比例
+//  - masterGain 統一輸出音量
+//  - DynamicsCompressorNode 防止多音疊加爆音，同時讓整體聽感更響亮
+//  - ADSR：快速 attack(8ms)、短 decay 到 sustain、放開時快速 release
 // ══════════════════════════════════════════
+let compressor = null;  // 共用的 DynamicsCompressor
+
 function initAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // DynamicsCompressor：讓多音同時按時不爆，且整體感知音量提升
+    compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.value = -12;
+    compressor.knee.value      = 8;
+    compressor.ratio.value     = 4;
+    compressor.attack.value    = 0.003;
+    compressor.release.value   = 0.15;
+    compressor.connect(audioCtx.destination);
+  }
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
+
 function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
- 
+
 function noteOn(baseMidi) {
   initAudio();
   const midi = baseMidi + octaveOffset;
   if (activeOscs[midi]) return;
- 
+
   const freq = midiToFreq(midi);
-  const osc  = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-  gain.gain.setValueAtTime(0, audioCtx.currentTime);
-  gain.gain.linearRampToValueAtTime(0.32, audioCtx.currentTime + 0.012);
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start();
-  activeOscs[midi] = { osc, gain };
- 
+  const now  = audioCtx.currentTime;
+
+  // 三個振盪器：基音 + 2倍頻（八度）+ 3倍頻（五度諧波）
+  const oscDefs = [
+    { type: 'triangle', freqMult: 1,   gainVal: 0.7  },  // 基音，最響
+    { type: 'sine',     freqMult: 2,   gainVal: 0.18 },  // 2次諧波，加亮度
+    { type: 'sine',     freqMult: 3,   gainVal: 0.07 },  // 3次諧波，加色彩
+  ];
+
+  // 整個音符的 envelope gain
+  const envGain = audioCtx.createGain();
+  envGain.gain.setValueAtTime(0, now);
+  envGain.gain.linearRampToValueAtTime(0.85, now + 0.008);   // Attack 8ms
+  envGain.gain.linearRampToValueAtTime(0.65, now + 0.06);    // Decay → Sustain
+  envGain.connect(compressor);
+
+  const oscs = oscDefs.map(({ type, freqMult, gainVal }) => {
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq * freqMult, now);
+    gain.gain.setValueAtTime(gainVal, now);
+    osc.connect(gain);
+    gain.connect(envGain);
+    osc.start();
+    return osc;
+  });
+
+  activeOscs[midi] = { oscs, envGain };
+
   pressedBase.add(baseMidi);
   keyEl(baseMidi)?.classList.add('pressed');
   showNote(NOTE_LAYOUT.find(n => n[2] === baseMidi)?.[0] || '', freq);
- 
+
   if (isRecording)
     recordEvents.push({ type: 'on', midi, time: Date.now() - recordStart });
 }
- 
+
 function noteOff(baseMidi) {
   const midi = baseMidi + octaveOffset;
   const data = activeOscs[midi];
   if (data) {
-    const { osc, gain } = data;
-    gain.gain.cancelScheduledValues(audioCtx.currentTime);
-    gain.gain.setValueAtTime(gain.gain.value, audioCtx.currentTime);
-    gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.025);
-    setTimeout(() => { try { osc.stop(); osc.disconnect(); } catch(e){} }, 130);
+    const { oscs, envGain } = data;
+    const now = audioCtx.currentTime;
+    // Release：40ms 淡出
+    envGain.gain.cancelScheduledValues(now);
+    envGain.gain.setValueAtTime(envGain.gain.value, now);
+    envGain.gain.setTargetAtTime(0, now, 0.04);
+    setTimeout(() => {
+      oscs.forEach(osc => { try { osc.stop(); osc.disconnect(); } catch(e){} });
+      try { envGain.disconnect(); } catch(e){}
+    }, 300);
     delete activeOscs[midi];
   }
   pressedBase.delete(baseMidi);
   keyEl(baseMidi)?.classList.remove('pressed');
   if (pressedBase.size === 0 && touchIdMap.size === 0) clearNote();
- 
+
   if (isRecording)
     recordEvents.push({ type: 'off', midi, time: Date.now() - recordStart });
 }
- 
+
 // 強制釋放全部（八度切換 / mouseup / blur 時用）
 function releaseAll() {
   [...pressedBase].forEach(m => noteOff(m));
@@ -578,30 +635,32 @@ function releaseAll() {
   touchIdMap.clear();
   pressedBase.clear();
   Object.keys(activeOscs).forEach(k => {
-    try { activeOscs[k].osc.stop(); activeOscs[k].osc.disconnect(); } catch(e){}
+    const d = activeOscs[k];
+    if (d.oscs) d.oscs.forEach(o => { try { o.stop(); o.disconnect(); } catch(e){} });
+    try { d.envGain?.disconnect(); } catch(e){}
     delete activeOscs[k];
   });
   document.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
 }
- 
+
 function keyEl(baseMidi) {
   return document.querySelector(`[data-midi="${baseMidi}"]`);
 }
- 
+
 // ══════════════════════════════════════════
 //  BUILD KEYBOARD
 // ══════════════════════════════════════════
 (function buildKeyboard() {
   const kb     = document.getElementById('keyboard');
   const whites = NOTE_LAYOUT.filter(n => !n[1]);
- 
+
   // 用螢幕長邊確保橫屏時計算正確
   const longEdge = Math.max(window.screen.width, window.screen.height);
   const WW = Math.min(Math.floor(longEdge / whites.length), 62);
   const BW = Math.round(WW * 0.62);
- 
+
   kb.style.width = (WW * whites.length) + 'px';
- 
+
   // 白鍵（height 由 CSS 100% 決定）
   NOTE_LAYOUT.forEach(([name, isBlack, midi]) => {
     if (isBlack) return;
@@ -610,7 +669,7 @@ function keyEl(baseMidi) {
     div.dataset.midi  = midi;
     div.dataset.label = name;
     div.style.width   = WW + 'px';
- 
+
     div.addEventListener('mousedown', e => { e.preventDefault(); noteOn(midi); });
     div.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -619,22 +678,22 @@ function keyEl(baseMidi) {
         noteOn(midi);
       });
     }, { passive: false });
- 
+
     kb.appendChild(div);
   });
- 
+
   // 黑鍵（absolute，height 由 CSS 60% 決定）
   NOTE_LAYOUT.forEach(([name, isBlack, midi]) => {
     if (!isBlack) return;
     const leftWhiteIdx = NOTE_LAYOUT.filter(n => !n[1] && n[2] < midi).length - 1;
     const leftPx = (leftWhiteIdx + 1) * WW - BW / 2;
- 
+
     const div = document.createElement('div');
     div.className    = 'bk';
     div.dataset.midi = midi;
     div.style.left   = leftPx + 'px';
     div.style.width  = BW + 'px';
- 
+
     div.addEventListener('mousedown', e => { e.preventDefault(); noteOn(midi); });
     div.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -643,11 +702,11 @@ function keyEl(baseMidi) {
         noteOn(midi);
       });
     }, { passive: false });
- 
+
     kb.appendChild(div);
   });
 })();
- 
+
 // ══════════════════════════════════════════
 //  TOUCH RELEASE（精確對應每根手指）
 // ══════════════════════════════════════════
@@ -663,11 +722,11 @@ function handleTouchEnd(e) {
 }
 window.addEventListener('touchend',    handleTouchEnd, { passive: false });
 window.addEventListener('touchcancel', handleTouchEnd, { passive: false });
- 
+
 // 滑鼠 & 視窗失焦 → 全部釋放
 window.addEventListener('mouseup', releaseAll);
 window.addEventListener('blur',    releaseAll);
- 
+
 // ══════════════════════════════════════════
 //  PC KEYBOARD
 // ══════════════════════════════════════════
@@ -683,7 +742,7 @@ window.addEventListener('keyup', e => {
   const midi = KEY_MAP[e.key.toLowerCase()];
   if (midi) { heldKeys.delete(e.key); noteOff(midi); }
 });
- 
+
 // ══════════════════════════════════════════
 //  UI HELPERS
 // ══════════════════════════════════════════
@@ -712,7 +771,7 @@ function stopDots() {
   clearInterval(dotTimer);
   for (let i = 0; i < 8; i++) document.getElementById('rd' + i).classList.remove('lit');
 }
- 
+
 // ══════════════════════════════════════════
 //  BUTTON HELPER（PC click + 手機 touchend）
 // ══════════════════════════════════════════
@@ -726,7 +785,7 @@ function addBtnListener(el, fn) {
     fn();
   });
 }
- 
+
 // ══════════════════════════════════════════
 //  OCTAVE BUTTONS
 // ══════════════════════════════════════════
@@ -738,7 +797,7 @@ function addBtnListener(el, fn) {
     document.getElementById(id).classList.add('active');
   });
 });
- 
+
 // ══════════════════════════════════════════
 //  RECORDING
 // ══════════════════════════════════════════
@@ -746,7 +805,7 @@ const btnRec  = document.getElementById('btn-rec');
 const btnPlay = document.getElementById('btn-play');
 const btnSave = document.getElementById('btn-save');
 const btnMidi = document.getElementById('btn-midi');
- 
+
 addBtnListener(btnRec, () => {
   if (isPlaying) return;
   if (!isRecording) {
@@ -766,7 +825,7 @@ addBtnListener(btnRec, () => {
     }
   }
 });
- 
+
 // ══════════════════════════════════════════
 //  PLAYBACK
 // ══════════════════════════════════════════
@@ -778,36 +837,53 @@ function playEvents(events) {
   btnRec.classList.add('disabled');
   releaseAll();
   playbackTimers = [];
- 
+
   events.forEach(ev => {
     playbackTimers.push(setTimeout(() => {
       if (ev.type === 'on') {
         const freq = midiToFreq(ev.midi);
-        const osc  = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.32, audioCtx.currentTime + 0.012);
-        osc.connect(gain); gain.connect(audioCtx.destination); osc.start();
-        activeOscs['pb' + ev.midi] = { osc, gain };
+        const now  = audioCtx.currentTime;
+        const oscDefs = [
+          { type: 'triangle', freqMult: 1,   gainVal: 0.7  },
+          { type: 'sine',     freqMult: 2,   gainVal: 0.18 },
+          { type: 'sine',     freqMult: 3,   gainVal: 0.07 },
+        ];
+        const envGain = audioCtx.createGain();
+        envGain.gain.setValueAtTime(0, now);
+        envGain.gain.linearRampToValueAtTime(0.85, now + 0.008);
+        envGain.gain.linearRampToValueAtTime(0.65, now + 0.06);
+        envGain.connect(compressor);
+        const oscs = oscDefs.map(({ type, freqMult, gainVal }) => {
+          const osc = audioCtx.createOscillator();
+          const g   = audioCtx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq * freqMult, now);
+          g.gain.setValueAtTime(gainVal, now);
+          osc.connect(g); g.connect(envGain); osc.start();
+          return osc;
+        });
+        activeOscs['pb' + ev.midi] = { oscs, envGain };
         const base = ev.midi - octaveOffset;
         keyEl(base)?.classList.add('pressed');
         showNote(NOTE_LAYOUT.find(n => n[2] === base)?.[0] || '', freq);
       } else {
         const data = activeOscs['pb' + ev.midi];
         if (data) {
-          data.gain.gain.cancelScheduledValues(audioCtx.currentTime);
-          data.gain.gain.setValueAtTime(data.gain.gain.value, audioCtx.currentTime);
-          data.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.025);
-          setTimeout(() => { try { data.osc.stop(); } catch(e){} }, 130);
+          const now = audioCtx.currentTime;
+          data.envGain.gain.cancelScheduledValues(now);
+          data.envGain.gain.setValueAtTime(data.envGain.gain.value, now);
+          data.envGain.gain.setTargetAtTime(0, now, 0.04);
+          setTimeout(() => {
+            data.oscs.forEach(o => { try { o.stop(); o.disconnect(); } catch(e){} });
+            try { data.envGain.disconnect(); } catch(e){}
+          }, 300);
           delete activeOscs['pb' + ev.midi];
         }
         keyEl(ev.midi - octaveOffset)?.classList.remove('pressed');
       }
     }, ev.time));
   });
- 
+
   const maxTime = events.reduce((m, e) => Math.max(m, e.time), 0);
   playbackTimers.push(setTimeout(() => {
     isPlaying = false;
@@ -819,9 +895,9 @@ function playEvents(events) {
     document.querySelectorAll('.melody-chip').forEach(c => c.classList.remove('playing'));
   }, maxTime + 600));
 }
- 
+
 addBtnListener(btnPlay, () => playEvents(recordEvents));
- 
+
 // ══════════════════════════════════════════
 //  SAVE / LOAD
 // ══════════════════════════════════════════
@@ -854,7 +930,7 @@ function renderChips() {
     bottom.appendChild(chip);
   });
 }
- 
+
 addBtnListener(btnSave, () => {
   if (!recordEvents.length) return;
   const name   = prompt('旋律名稱？') || ('旋律 ' + (savedMelodies.length + 1));
@@ -867,10 +943,10 @@ addBtnListener(btnSave, () => {
   a.click();
   setStatus('SAVED'); setTimeout(() => setStatus('READY'), 1500);
 });
- 
+
 addBtnListener(document.getElementById('btn-load'), () =>
   document.getElementById('file-input').click());
- 
+
 document.getElementById('file-input').addEventListener('change', e => {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -888,7 +964,7 @@ document.getElementById('file-input').addEventListener('change', e => {
   };
   reader.readAsText(file); e.target.value = '';
 });
- 
+
 // ══════════════════════════════════════════
 //  MIDI EXPORT
 // ══════════════════════════════════════════
@@ -898,7 +974,7 @@ function toVarLen(v) {
   return b.reverse();
 }
 function toI32(n) { return [(n>>24)&0xff,(n>>16)&0xff,(n>>8)&0xff,n&0xff]; }
- 
+
 function buildMidi(events) {
   const header = [0x4D,0x54,0x68,0x64,0,0,0,6,0,0,0,1,0x01,0xE0];
   let track = [], last = 0;
@@ -910,14 +986,14 @@ function buildMidi(events) {
   track.push(0x00, 0xFF, 0x2F, 0x00);
   return new Uint8Array([...header, 0x4D,0x54,0x72,0x6B,...toI32(track.length),...track]);
 }
- 
+
 addBtnListener(btnMidi, () => {
   if (!recordEvents.length) return;
   const blob = new Blob([buildMidi(recordEvents)], { type: 'audio/midi' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = `piano_${Date.now()}.mid`; a.click();
 });
- 
+
 // ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
