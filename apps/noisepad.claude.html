@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<!--
+# Noisepad — 開發筆記
+
+> 版本：v2（重構版）  
+> 格式：單一 `.html` 檔案，無後端，無外部資料  
+> 外部依賴：Tone.js 14.8.49（CDN）、Google Fonts（Share Tech Mono + Rajdhani）
+
+---
+
+## 一、這是什麼？
+
+Noisepad 是一個跑在瀏覽器裡的**矩陣音序器（Matrix Sequencer）**，靈感來自 Yamaha TENORI-ON。
+
+一條掃描線從左到右不斷循環，掃到被點亮的格子就觸發聲音。橫軸代表時間（節拍），縱軸代表音高（或鼓組音色）。不需要任何安裝，存成 `.html` 用瀏覽器開就能玩。
+
+---
+
+## 二、功能清單
+
+### 🎛️ 網格（PAD）
+| 項目 | 說明 |
+|------|------|
+| 初始尺寸 | 12×12（相容 3/4 拍與 4/4 拍） |
+| 最大尺寸 | 36×36 |
+| 最小尺寸 | 12×12（下限，無法再縮減） |
+| 擴展方式 | 左側 ▲▼ 按鈕往高/低音方向加列；PAD 下方 +/- 加減行數 |
+| 格子縮放 | 格子寬高自動計算（畫布尺寸 ÷ 格數），永遠填滿容器，不出現捲軸 |
+| 點擊 | 滑鼠點擊 or 觸控點擊切換格子開/關 |
+| 拖曳 | 按住拖曳可連續畫格子（滑鼠與觸控皆支援） |
+
+### 🎵 音高系統
+| 項目 | 說明 |
+|------|------|
+| 基準音 | C3（MIDI 48，261.63 Hz），在網格中央，視覺特別標示 |
+| 音名顯示 | 每列左側顯示真實音名（C3、D4、G#2 等），隨音階切換即時更新 |
+| C 音標記 | C3 用亮藍色標示；其他八度的 C（C2、C4...）用較淡的顏色標示，作為視覺導航 |
+| 音階切換 | 全音階（Chromatic 12 半音）/ 白鍵（C Major 7 音）/ 五聲音階（CDEGA 5 音） |
+| 音高映射 | 往上擴展 = 高音；往下擴展 = 低音；切換音階時音名標籤即時重新計算 |
+
+### 🥁 音色系統
+| 符號 | 音色 | 合成方式 |
+|------|------|---------|
+| ∿ | Sine（正弦波） | OscillatorNode，type = sine，有衰減包絡 |
+| ⊓ | Square（方波） | OscillatorNode，type = square，復古電玩感 |
+| ● | Kick（大鼓） | 正弦波 160Hz → 40Hz 頻率滑落 + 快速音量衰減 |
+| ≋ | Snare（小鼓） | 白雜訊 + BandPass 濾波器（2000Hz）+ 衰減 |
+| × | Hi-hat（鈸） | 白雜訊 + HighPass 濾波器（8000Hz）+ 極短衰減 |
+
+每一列可以獨立設定音色，點列左側的小圖示就會彈出浮動選單，選完自動收起。
+
+> 全部用 Web Audio API 純數學合成，**不需要任何音檔**。
+
+### ⏱️ 節奏控制
+- **BPM**：頂部 `−(120)+` 按鈕，每次加減 5 BPM，範圍 40–240
+- **Tone.js Transport**：使用 `scheduleRepeat('16n')` 確保節拍精準，不會因為 JS 主線程阻塞而漂移
+- **步驟指示點**：底部顯示目前掃描到第幾格，每四格有一個較大的拍點提示
+
+### 💾 存檔系統
+- **自動存檔**：每次修改（點格子、調整設定）都會自動寫入 `localStorage`，重整網頁不會遺失進度
+- **匯出 JSON**：把完整狀態（格數、BPM、音色、點擊位置）存成 `.json` 檔案下載
+- **匯入 JSON**：讀取之前匯出的 `.json` 檔案，完整還原狀態
+
+### ⌨️ 快捷鍵
+- **空白鍵**：播放 / 停止
+
+---
+
+## 三、版面設計邏輯
+
+```
+┌─────────────────────────────────────┐
+│  LOGO  │  BPM  │  音階  │  PLAY     │  ← 頂部控制列（最窄）
+├──┬──┬──────────────────────────┬────┤
+│  │音│                          │    │
+│▲▼│名│      C A N V A S         │    │
+│  │音│         PAD              │    │  ← 主角區
+│行│色│                          │    │
+│列│箭│                          │    │
+│鈕│頭│                          │    │
+├──┴──┴──────────────────────────┴────┤
+│           (PAD 下方) COL  −12+      │  ← 行數控制
+├─────────────────────────────────────┤
+│  ●●●●●●●●●●●●  │ CLR EXP IMP      │  ← 底部狀態列（最窄）
+└─────────────────────────────────────┘
+```
+
+**設計原則：PAD 是絕對主角，所有控制項都塞邊緣。**
+
+---
+
+## 四、技術架構
+
+### 繪圖
+- 使用 **HTML5 Canvas API** 繪製網格
+- 每次狀態改變都呼叫 `drawGrid()` 重繪整張畫布
+- 支援 `devicePixelRatio` 高解析度螢幕（Retina / HiDPI）
+- 格子大小公式：`cellWidth = canvasWidth / cols`，`cellHeight = canvasHeight / rows`
+
+### 音訊
+- **Tone.js**：負責精準的 BPM 時鐘（`Tone.Transport`）
+- **Web Audio API（原生）**：負責實際的音訊合成（`OscillatorNode`、`GainNode`、`BiquadFilterNode`、`AudioBufferSourceNode`）
+- 音訊上下文必須由使用者互動觸發（瀏覽器政策），所以有啟動遮罩
+
+### 狀態管理
+```
+state = {
+  cols,           // 行數
+  rows,           // 列數
+  c3Index,        // C3 在第幾列（由上往下數）
+  bpm,
+  scale,          // 'chromatic' | 'major' | 'pentatonic'
+  isPlaying,
+  currentStep,    // 掃描線目前在第幾行
+  gridData[col][row],  // 二維布林陣列
+  rowTimbre[row], // 每列音色
+}
+```
+
+### 音高計算
+```
+rowToMidi(rowIdx):
+  1. 計算該列距離 c3Index 的音階步數（distFromC3）
+  2. 換算八度（octave = floor(dist / scaleLength)）
+  3. 找出當前音階的音程（semitone = scale[step]）
+  4. MIDI = 48 + octave*12 + semitone  （C3 = 48）
+```
+
+---
+
+## 五、設計風格
+
+- **主色調**：深黑背景 `#0a0a0f`，青藍色強調 `#00e5ff`
+- **字型**：`Share Tech Mono`（數字 / Logo）+ `Rajdhani`（UI 文字）
+- **鼓聲配色**：Kick 橘 `#ff6b35`、Snare 紅 `#ff3366`、Hi-hat 黃 `#ffe066`、Square 紫 `#aa44ff`
+- **格子發光**：啟用的格子有 `shadowBlur` 發光效果，視覺上有類 LED 的質感
+- **C3 標示**：亮藍色行背景 + 整列邊框加亮，視覺錨點清楚
+
+---
+
+## 六、已知限制與未來可加的功能
+
+### 已知限制
+- 格子縮到很小（接近 36 列）時，手機觸控精確度下降，建議用平板或滑鼠
+- 匯入 JSON 時如果格數比目前大，會直接擴展（無動畫）
+
+### 未來可以加的功能
+- [ ] 多組存檔切換（目前只有一組 localStorage + 匯出）
+- [ ] 每列音量控制（velocity）
+- [ ] 鋼琴捲軸側邊（Piano Roll 視覺輔助）
+- [ ] 殘響 / 延遲效果器（Reverb / Delay）
+- [ ] 匯出音訊（Web Audio OfflineContext 渲染成 .wav）
+- [ ] 手機橫式 / 直式自動切換版面
+
+---
+
+## 七、HTML 內部結構註解對照
+
+```
+#overlay          → 啟動遮罩（等待使用者互動以解鎖 AudioContext）
+#timbre-popup     → 音色浮動選單（點列左側箭頭觸發）
+#topbar           → 頂部控制列：Logo / BPM / 音階 / Play
+#main             → 主要佈局容器（flex row）
+  #left-sidebar   → 左側列增減按鈕（▲▼ for 高音/低音方向）
+  #row-labels     → 音名標籤 + 音色小箭頭（每列一格）
+  #pad-wrap       → PAD 主區
+    #canvas-container → Canvas 容器（flex 撐滿）
+    canvas#grid   → 實際繪圖的 Canvas
+    #col-strip    → 行數 +/- 控制（PAD 正下方）
+#bottombar        → 底部：步驟點 / CLR / EXP / IMP
+```
+
+---
+
+*最後更新：2026-03*
+-->
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Noisepad</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --panel: #111118;
+    --border: #1e1e2e;
+    --text: #c8c8e0;
+    --muted: #44445a;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --c3-color: #00e5ff;
+    --c-color: #1a3a40;
+    --cell-on: #00e5ff;
+    --cell-on-glow: rgba(0,229,255,0.4);
+    --playhead: rgba(255,255,255,0.12);
+    --playhead-edge: rgba(255,255,255,0.7);
+    --kick-color: #ff6b35;
+    --snare-color: #ff3366;
+    --hihat-color: #ffe066;
+    --danger: #ff3366;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  #logo {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 15px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-shadow: 0 0 12px var(--accent);
+    flex-shrink: 0;
+  }
+
+  .top-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  /* BPM */
+  .bpm-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 4px;
+  }
+  .bpm-group span {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    min-width: 36px;
+    text-align: center;
+  }
+
+  /* Scale select */
+  select.scale-sel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    padding: 3px 6px;
+    border-radius: 6px;
+    outline: none;
+  }
+
+  /* Buttons */
+  .btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+  .btn:active { transform: scale(0.94); }
+  .btn.accent {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  .btn.danger {
+    background: var(--danger);
+    color: #fff;
+    border-color: var(--danger);
+  }
+  .btn.small {
+    padding: 3px 7px;
+    font-size: 12px;
+  }
+  .icon-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .icon-btn:active { transform: scale(0.9); color: var(--accent); }
+  .icon-btn:disabled { opacity: 0.25; pointer-events: none; }
+
+  /* ── MAIN AREA ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ── LEFT SIDEBAR: row controls ── */
+  #left-sidebar {
+    width: 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    flex-shrink: 0;
+    gap: 2px;
+  }
+
+  .sidebar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .sidebar-label {
+    font-size: 8px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+
+  /* ── ROW LABEL STRIP ── */
+  #row-labels {
+    width: 32px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .row-label-cell {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 3px;
+    position: relative;
+  }
+  .row-label-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px;
+    color: var(--muted);
+    line-height: 1;
+  }
+  .row-label-cell.is-c3 .row-label-text { color: var(--c3-color); font-weight: bold; }
+  .row-label-cell.is-c .row-label-text { color: #2a8a9a; }
+
+  /* tiny arrow for timbre */
+  .timbre-btn {
+    position: absolute;
+    left: 1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 18px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: var(--muted);
+    font-size: 8px;
+    transition: color 0.15s;
+  }
+  .timbre-btn:hover { color: var(--accent); }
+  .timbre-btn.sine   { color: #4488ff; }
+  .timbre-btn.square { color: #aa44ff; }
+  .timbre-btn.kick   { color: var(--kick-color); }
+  .timbre-btn.snare  { color: var(--snare-color); }
+  .timbre-btn.hihat  { color: var(--hihat-color); }
+
+  /* ── PAD WRAPPER ── */
+  #pad-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  #canvas-container {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+
+  canvas#grid {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+  }
+
+  /* col +/- strip below canvas */
+  #col-strip {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 3px 4px;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .col-label {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    margin-right: 2px;
+  }
+
+  /* ── BOTTOM BAR ── */
+  #bottombar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    gap: 6px;
+  }
+
+  /* ── OVERLAY ── */
+  #overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+  #overlay h1 {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 32px;
+    color: var(--accent);
+    text-shadow: 0 0 30px var(--accent);
+    letter-spacing: 4px;
+    margin-bottom: 8px;
+  }
+  #overlay p {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 28px;
+    letter-spacing: 1px;
+  }
+  #overlay .start-btn {
+    background: var(--accent);
+    color: #000;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 3px;
+    border: none;
+    padding: 14px 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    box-shadow: 0 0 30px var(--cell-on-glow);
+    transition: transform 0.1s;
+  }
+  #overlay .start-btn:active { transform: scale(0.96); }
+
+  /* ── TIMBRE POPUP ── */
+  #timbre-popup {
+    position: fixed;
+    background: #18181f;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 4px 0;
+    z-index: 200;
+    display: none;
+    box-shadow: 0 4px 24px rgba(0,229,255,0.2);
+    min-width: 90px;
+  }
+  #timbre-popup.show { display: block; }
+  .timbre-option {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: background 0.1s;
+  }
+  .timbre-option:hover { background: var(--border); }
+  .timbre-option[data-val="sine"]   { color: #4488ff; }
+  .timbre-option[data-val="square"] { color: #aa44ff; }
+  .timbre-option[data-val="kick"]   { color: var(--kick-color); }
+  .timbre-option[data-val="snare"]  { color: var(--snare-color); }
+  .timbre-option[data-val="hihat"]  { color: var(--hihat-color); }
+
+  /* step indicator dots */
+  #step-dots {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+  }
+  .step-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.08s;
+  }
+  .step-dot.beat { background: #2a2a3a; width: 6px; height: 6px; }
+  .step-dot.active { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+  #import-file { display: none; }
+</style>
+</head>
+<body>
+
+<!-- OVERLAY -->
+<div id="overlay">
+  <h1>NOISEPAD</h1>
+  <p>matrix sequencer</p>
+  <button class="start-btn" id="start-btn">TAP TO START</button>
+</div>
+
+<!-- TIMBRE POPUP -->
+<div id="timbre-popup">
+  <div class="timbre-option" data-val="sine">SINE ∿</div>
+  <div class="timbre-option" data-val="square">SQUARE ⊓</div>
+  <div class="timbre-option" data-val="kick">KICK ●</div>
+  <div class="timbre-option" data-val="snare">SNARE ≋</div>
+  <div class="timbre-option" data-val="hihat">HI-HAT ×</div>
+</div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div id="logo">NOISEPAD</div>
+  <div class="top-controls">
+    <!-- BPM -->
+    <div class="bpm-group">
+      <button class="icon-btn" id="bpm-minus">−</button>
+      <span id="bpm-val">120</span>
+      <button class="icon-btn" id="bpm-plus">+</button>
+    </div>
+    <!-- Scale -->
+    <select class="scale-sel" id="scale-sel">
+      <option value="chromatic">全音階</option>
+      <option value="major" selected>白鍵</option>
+      <option value="pentatonic">五聲</option>
+    </select>
+    <!-- Play -->
+    <button class="btn accent" id="play-btn">▶ PLAY</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- LEFT SIDEBAR: row up/down -->
+  <div id="left-sidebar">
+    <div class="sidebar-col">
+      <button class="icon-btn" id="row-top-plus" title="往高音加列">▲</button>
+      <button class="icon-btn" id="row-top-minus" title="縮減高音">▼</button>
+    </div>
+    <div class="sidebar-label">ROW</div>
+    <div class="sidebar-col">
+      <button class="icon-btn" id="row-bot-plus" title="往低音加列">▼</button>
+      <button class="icon-btn" id="row-bot-minus" title="縮減低音">▲</button>
+    </div>
+  </div>
+
+  <!-- ROW LABELS (note names + timbre arrows) -->
+  <div id="row-labels"></div>
+
+  <!-- PAD -->
+  <div id="pad-wrap">
+    <div id="canvas-container">
+      <canvas id="grid"></canvas>
+    </div>
+    <!-- COL +/- strip -->
+    <div id="col-strip">
+      <span class="col-label">COL</span>
+      <button class="icon-btn" id="col-minus">−</button>
+      <span id="col-val" style="font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;min-width:20px;text-align:center">12</span>
+      <button class="icon-btn" id="col-plus">+</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- BOTTOM BAR -->
+<div id="bottombar">
+  <div id="step-dots"></div>
+  <div style="display:flex;gap:6px;align-items:center">
+    <button class="btn small" id="clear-btn">CLR</button>
+    <button class="btn small" id="export-btn">EXP</button>
+    <button class="btn small" id="import-btn">IMP</button>
+    <input type="file" id="import-file" accept=".json">
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────
+const CONFIG = {
+  minCols: 12, maxCols: 36,
+  minRows: 12, maxRows: 36,
+  defaultCols: 12, defaultRows: 12,
+};
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+const state = {
+  cols: CONFIG.defaultCols,
+  rows: CONFIG.defaultRows,
+  c3Index: 6,          // which row index = C3 (counted from top)
+  bpm: 120,
+  scale: 'major',
+  isPlaying: false,
+  currentStep: 0,
+  gridData: [],        // [col][row] = bool
+  rowTimbre: [],       // [row] = 'sine'|'square'|'kick'|'snare'|'hihat'
+};
+
+// ─────────────────────────────────────────────
+// SCALE DEFS  (intervals from root, semitones)
+// ─────────────────────────────────────────────
+const SCALES = {
+  chromatic:  [0,1,2,3,4,5,6,7,8,9,10,11],
+  major:      [0,2,4,5,7,9,11],
+  pentatonic: [0,2,4,7,9],
+};
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+// Given a row index (0=top), return MIDI note number
+function rowToMidi(rowIdx) {
+  const scale = SCALES[state.scale];
+  // c3Index maps to MIDI 60 (C3)
+  const distFromC3 = state.c3Index - rowIdx; // positive = above C3
+  // In scale steps from C3
+  const octaveSteps = scale.length;
+  const stepsFromC3 = distFromC3;
+  const octave = Math.floor(stepsFromC3 / octaveSteps);
+  const step = ((stepsFromC3 % octaveSteps) + octaveSteps) % octaveSteps;
+  const semitone = scale[step];
+  // C3 = MIDI 48 (using C3=48 convention, C4=60 middle C)
+  return 48 + octave * 12 + semitone;
+}
+
+function midiToFreq(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function midiToName(midi) {
+  const oct = Math.floor(midi / 12) - 1;
+  const name = NOTE_NAMES[midi % 12];
+  return name + oct;
+}
+
+function isC(rowIdx) {
+  const scale = SCALES[state.scale];
+  const dist = state.c3Index - rowIdx;
+  return dist % scale.length === 0;
+}
+function isC3(rowIdx) { return rowIdx === state.c3Index; }
+
+// ─────────────────────────────────────────────
+// AUDIO
+// ─────────────────────────────────────────────
+let audioReady = false;
+let scheduleId = null;
+
+async function initAudio() {
+  await Tone.start();
+  Tone.Transport.bpm.value = state.bpm;
+  Tone.Transport.scheduleRepeat(tick, '16n');
+  audioReady = true;
+}
+
+function tick(time) {
+  const col = state.currentStep;
+  for (let r = 0; r < state.rows; r++) {
+    if (state.gridData[col] && state.gridData[col][r]) {
+      triggerSound(r, time);
+    }
+  }
+  state.currentStep = (state.currentStep + 1) % state.cols;
+  drawGrid();
+  updateStepDots();
+}
+
+function triggerSound(rowIdx, time) {
+  const timbre = state.rowTimbre[rowIdx] || 'sine';
+  const ctx = Tone.context.rawContext;
+
+  if (timbre === 'kick') {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(160, time);
+    osc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
+    gain.gain.setValueAtTime(1.2, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(time); osc.stop(time + 0.31);
+    return;
+  }
+  if (timbre === 'snare') {
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    const filt = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    src.buffer = buf;
+    filt.type = 'bandpass';
+    filt.frequency.value = 2000;
+    filt.Q.value = 0.5;
+    gain.gain.setValueAtTime(0.8, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+    src.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
+    src.start(time); src.stop(time + 0.2);
+    return;
+  }
+  if (timbre === 'hihat') {
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    const filt = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    src.buffer = buf;
+    filt.type = 'highpass';
+    filt.frequency.value = 8000;
+    gain.gain.setValueAtTime(0.5, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.07);
+    src.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
+    src.start(time); src.stop(time + 0.08);
+    return;
+  }
+  // Pitched synth
+  const midi = rowToMidi(rowIdx);
+  const freq = midiToFreq(midi);
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = timbre; // 'sine' or 'square'
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.35, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(time); osc.stop(time + 0.41);
+}
+
+// ─────────────────────────────────────────────
+// CANVAS DRAW
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('grid');
+const ctx2 = canvas.getContext('2d');
+
+function drawGrid() {
+  const container = document.getElementById('canvas-container');
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+  if (W === 0 || H === 0) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx2.scale(dpr, dpr);
+  }
+
+  const cW = W / state.cols;
+  const cH = H / state.rows;
+
+  // Background
+  ctx2.fillStyle = '#0a0a0f';
+  ctx2.fillRect(0, 0, W, H);
+
+  // Row backgrounds (C3, C, normal)
+  for (let r = 0; r < state.rows; r++) {
+    const y = r * cH;
+    if (isC3(r)) {
+      ctx2.fillStyle = 'rgba(0,229,255,0.07)';
+      ctx2.fillRect(0, y, W, cH);
+    } else if (isC(r)) {
+      ctx2.fillStyle = 'rgba(0,120,140,0.04)';
+      ctx2.fillRect(0, y, W, cH);
+    }
+  }
+
+  // Grid lines
+  ctx2.strokeStyle = '#1a1a26';
+  ctx2.lineWidth = 0.5;
+  for (let c = 0; c <= state.cols; c++) {
+    const x = c * cW;
+    ctx2.beginPath(); ctx2.moveTo(x, 0); ctx2.lineTo(x, H); ctx2.stroke();
+  }
+  for (let r = 0; r <= state.rows; r++) {
+    const y = r * cH;
+    // Beat divisions every 4 cols
+    const isC3Row = (r < state.rows) && isC3(r);
+    ctx2.strokeStyle = isC3Row ? 'rgba(0,229,255,0.25)' : (isC(r) ? 'rgba(0,180,200,0.12)' : '#1a1a26');
+    ctx2.lineWidth = isC3Row ? 1 : 0.5;
+    ctx2.beginPath(); ctx2.moveTo(0, y); ctx2.lineTo(W, y); ctx2.stroke();
+  }
+
+  // Beat division verticals (every 4)
+  for (let c = 0; c <= state.cols; c += 4) {
+    ctx2.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx2.lineWidth = 1;
+    ctx2.beginPath(); ctx2.moveTo(c * cW, 0); ctx2.lineTo(c * cW, H); ctx2.stroke();
+  }
+
+  // Active cells
+  for (let c = 0; c < state.cols; c++) {
+    for (let r = 0; r < state.rows; r++) {
+      if (!state.gridData[c] || !state.gridData[c][r]) continue;
+      const timbre = state.rowTimbre[r] || 'sine';
+      let col = '#00e5ff';
+      if (timbre === 'kick')   col = '#ff6b35';
+      else if (timbre === 'snare') col = '#ff3366';
+      else if (timbre === 'hihat') col = '#ffe066';
+      else if (timbre === 'square') col = '#aa44ff';
+
+      const x = c * cW + 1.5;
+      const y = r * cH + 1.5;
+      const w = cW - 3;
+      const h = cH - 3;
+      const rad = Math.min(3, cW * 0.15, cH * 0.15);
+
+      ctx2.shadowColor = col;
+      ctx2.shadowBlur = 8;
+      ctx2.fillStyle = col;
+      ctx2.beginPath();
+      ctx2.roundRect(x, y, w, h, rad);
+      ctx2.fill();
+      ctx2.shadowBlur = 0;
+    }
+  }
+
+  // Playhead
+  if (state.isPlaying || state.currentStep > 0) {
+    const ps = state.isPlaying
+      ? (state.currentStep === 0 ? state.cols - 1 : state.currentStep - 1)
+      : state.currentStep;
+    const px = ps * cW;
+    ctx2.fillStyle = 'rgba(255,255,255,0.09)';
+    ctx2.fillRect(px, 0, cW, H);
+    ctx2.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx2.fillRect(px + cW - 1.5, 0, 1.5, H);
+  }
+}
+
+// ─────────────────────────────────────────────
+// ROW LABELS UI
+// ─────────────────────────────────────────────
+function buildRowLabels() {
+  const container = document.getElementById('row-labels');
+  container.innerHTML = '';
+  for (let r = 0; r < state.rows; r++) {
+    const cell = document.createElement('div');
+    cell.className = 'row-label-cell' +
+      (isC3(r) ? ' is-c3' : (isC(r) ? ' is-c' : ''));
+    cell.dataset.row = r;
+
+    // Timbre mini-btn
+    const timbre = state.rowTimbre[r] || 'sine';
+    const arrow = document.createElement('button');
+    arrow.className = `timbre-btn ${timbre}`;
+    arrow.dataset.row = r;
+    arrow.title = 'Change timbre';
+    arrow.textContent = timbreIcon(timbre);
+    arrow.addEventListener('click', (e) => { e.stopPropagation(); openTimbrePopup(r, arrow); });
+    cell.appendChild(arrow);
+
+    // Note label (only if tall enough)
+    const midi = rowToMidi(r);
+    const name = midiToName(midi);
+    const label = document.createElement('span');
+    label.className = 'row-label-text';
+    label.textContent = name;
+    cell.appendChild(label);
+
+    container.appendChild(cell);
+  }
+}
+
+function timbreIcon(t) {
+  return { sine:'∿', square:'⊓', kick:'●', snare:'≋', hihat:'×' }[t] || '∿';
+}
+
+// ─────────────────────────────────────────────
+// STEP DOTS
+// ─────────────────────────────────────────────
+function buildStepDots() {
+  const el = document.getElementById('step-dots');
+  el.innerHTML = '';
+  const show = Math.min(state.cols, 24);
+  for (let i = 0; i < show; i++) {
+    const d = document.createElement('div');
+    d.className = 'step-dot' + (i % 4 === 0 ? ' beat' : '');
+    el.appendChild(d);
+  }
+}
+function updateStepDots() {
+  const dots = document.querySelectorAll('.step-dot');
+  const active = state.isPlaying
+    ? (state.currentStep === 0 ? state.cols - 1 : state.currentStep - 1)
+    : -1;
+  dots.forEach((d, i) => d.classList.toggle('active', i === active));
+}
+
+// ─────────────────────────────────────────────
+// TIMBRE POPUP
+// ─────────────────────────────────────────────
+let popupRow = -1;
+const popup = document.getElementById('timbre-popup');
+
+function openTimbrePopup(rowIdx, anchor) {
+  popupRow = rowIdx;
+  const rect = anchor.getBoundingClientRect();
+  popup.style.left = (rect.right + 4) + 'px';
+  popup.style.top = Math.min(rect.top, window.innerHeight - 180) + 'px';
+  popup.classList.add('show');
+}
+
+popup.querySelectorAll('.timbre-option').forEach(opt => {
+  opt.addEventListener('click', () => {
+    if (popupRow < 0) return;
+    state.rowTimbre[popupRow] = opt.dataset.val;
+    popup.classList.remove('show');
+    buildRowLabels();
+    saveLocal();
+  });
+});
+
+document.addEventListener('click', (e) => {
+  if (!popup.contains(e.target) && !e.target.classList.contains('timbre-btn')) {
+    popup.classList.remove('show');
+  }
+});
+
+// ─────────────────────────────────────────────
+// GRID INIT & DATA OPS
+// ─────────────────────────────────────────────
+function initGridData() {
+  state.gridData = Array(state.cols).fill(null).map(() => Array(state.rows).fill(false));
+  state.rowTimbre = Array(state.rows).fill('sine');
+  state.c3Index = Math.floor(state.rows / 2);
+}
+
+function modifyCols(delta) {
+  const n = state.cols + delta;
+  if (n < CONFIG.minCols || n > CONFIG.maxCols) return;
+  if (delta > 0) {
+    state.gridData.push(Array(state.rows).fill(false));
+  } else {
+    state.gridData.pop();
+    if (state.currentStep >= n) state.currentStep = 0;
+  }
+  state.cols = n;
+  document.getElementById('col-val').textContent = n;
+  updateEdgeBtns();
+  buildStepDots();
+  drawGrid();
+  saveLocal();
+}
+
+function modifyRows(delta, side) {
+  // side: 'top' = high notes, 'bottom' = low notes
+  const n = state.rows + delta;
+  if (n < CONFIG.minRows || n > CONFIG.maxRows) return;
+  if (delta > 0) {
+    if (side === 'top') {
+      state.gridData.forEach(col => col.unshift(false));
+      state.rowTimbre.unshift(state.rowTimbre[0] || 'sine');
+      state.c3Index++;
+    } else {
+      state.gridData.forEach(col => col.push(false));
+      state.rowTimbre.push(state.rowTimbre[state.rowTimbre.length - 1] || 'sine');
+    }
+  } else {
+    if (side === 'top') {
+      state.gridData.forEach(col => col.shift());
+      state.rowTimbre.shift();
+      state.c3Index = Math.max(0, state.c3Index - 1);
+    } else {
+      state.gridData.forEach(col => col.pop());
+      state.rowTimbre.pop();
+    }
+  }
+  state.rows = n;
+  updateEdgeBtns();
+  buildRowLabels();
+  drawGrid();
+  saveLocal();
+}
+
+function updateEdgeBtns() {
+  document.getElementById('col-plus').disabled  = state.cols >= CONFIG.maxCols;
+  document.getElementById('col-minus').disabled = state.cols <= CONFIG.minCols;
+  document.getElementById('row-top-plus').disabled  = state.rows >= CONFIG.maxRows;
+  document.getElementById('row-top-minus').disabled = state.rows <= CONFIG.minRows;
+  document.getElementById('row-bot-plus').disabled  = state.rows >= CONFIG.maxRows;
+  document.getElementById('row-bot-minus').disabled = state.rows <= CONFIG.minRows;
+}
+
+// ─────────────────────────────────────────────
+// CANVAS CLICK / DRAG
+// ─────────────────────────────────────────────
+let isDragging = false;
+let dragValue = null; // what we're setting (true/false)
+
+function cellFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX ?? e.touches?.[0]?.clientX) - rect.left;
+  const cy = (e.clientY ?? e.touches?.[0]?.clientY) - rect.top;
+  const col = Math.floor(cx / (rect.width  / state.cols));
+  const row = Math.floor(cy / (rect.height / state.rows));
+  if (col < 0 || col >= state.cols || row < 0 || row >= state.rows) return null;
+  return { col, row };
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  dragValue = !state.gridData[cell.col][cell.row];
+  state.gridData[cell.col][cell.row] = dragValue;
+  drawGrid(); saveLocal();
+});
+canvas.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  if (state.gridData[cell.col][cell.row] !== dragValue) {
+    state.gridData[cell.col][cell.row] = dragValue;
+    drawGrid(); saveLocal();
+  }
+});
+window.addEventListener('mouseup', () => { isDragging = false; });
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  isDragging = true;
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  dragValue = !state.gridData[cell.col][cell.row];
+  state.gridData[cell.col][cell.row] = dragValue;
+  drawGrid(); saveLocal();
+}, { passive: false });
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (!isDragging) return;
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  if (state.gridData[cell.col][cell.row] !== dragValue) {
+    state.gridData[cell.col][cell.row] = dragValue;
+    drawGrid(); saveLocal();
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', () => { isDragging = false; });
+
+// ─────────────────────────────────────────────
+// PLAY / STOP
+// ─────────────────────────────────────────────
+function togglePlay() {
+  if (!audioReady) return;
+  state.isPlaying = !state.isPlaying;
+  const btn = document.getElementById('play-btn');
+  if (state.isPlaying) {
+    state.currentStep = 0;
+    Tone.Transport.start();
+    btn.textContent = '⏹ STOP';
+    btn.style.background = 'var(--danger)';
+    btn.style.borderColor = 'var(--danger)';
+  } else {
+    Tone.Transport.stop();
+    state.currentStep = 0;
+    btn.textContent = '▶ PLAY';
+    btn.style.background = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+    drawGrid();
+    updateStepDots();
+  }
+}
+
+// ─────────────────────────────────────────────
+// SAVE / LOAD / EXPORT / IMPORT
+// ─────────────────────────────────────────────
+function saveLocal() {
+  const payload = {
+    cols: state.cols, rows: state.rows,
+    c3Index: state.c3Index, bpm: state.bpm,
+    scale: state.scale, gridData: state.gridData,
+    rowTimbre: state.rowTimbre,
+  };
+  try { localStorage.setItem('noisepad_v2', JSON.stringify(payload)); } catch(e) {}
+}
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem('noisepad_v2');
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    Object.assign(state, d);
+    document.getElementById('scale-sel').value = state.scale;
+    document.getElementById('bpm-val').textContent = state.bpm;
+    document.getElementById('col-val').textContent = state.cols;
+    return true;
+  } catch(e) { return false; }
+}
+
+function exportJSON() {
+  const raw = localStorage.getItem('noisepad_v2') || '{}';
+  const a = document.createElement('a');
+  a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(raw);
+  a.download = 'noisepad.json';
+  a.click();
+}
+
+function importJSON(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const d = JSON.parse(ev.target.result);
+      if (state.isPlaying) togglePlay();
+      Object.assign(state, d);
+      Tone.Transport.bpm.value = state.bpm;
+      document.getElementById('bpm-val').textContent = state.bpm;
+      document.getElementById('scale-sel').value = state.scale;
+      document.getElementById('col-val').textContent = state.cols;
+      rebuildAll();
+      saveLocal();
+    } catch { alert('JSON 讀取失敗'); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ─────────────────────────────────────────────
+// REBUILD ALL UI
+// ─────────────────────────────────────────────
+function rebuildAll() {
+  updateEdgeBtns();
+  buildRowLabels();
+  buildStepDots();
+  drawGrid();
+}
+
+// ─────────────────────────────────────────────
+// EVENT BINDINGS
+// ─────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', async () => {
+  await initAudio();
+  document.getElementById('overlay').style.display = 'none';
+});
+
+document.getElementById('play-btn').addEventListener('click', togglePlay);
+
+document.getElementById('bpm-minus').addEventListener('click', () => {
+  if (state.bpm > 40) {
+    state.bpm -= 5;
+    document.getElementById('bpm-val').textContent = state.bpm;
+    Tone.Transport.bpm.rampTo(state.bpm, 0.1);
+    saveLocal();
+  }
+});
+document.getElementById('bpm-plus').addEventListener('click', () => {
+  if (state.bpm < 240) {
+    state.bpm += 5;
+    document.getElementById('bpm-val').textContent = state.bpm;
+    Tone.Transport.bpm.rampTo(state.bpm, 0.1);
+    saveLocal();
+  }
+});
+
+document.getElementById('scale-sel').addEventListener('change', e => {
+  state.scale = e.target.value;
+  buildRowLabels();
+  drawGrid();
+  saveLocal();
+});
+
+document.getElementById('col-plus').addEventListener('click',  () => modifyCols(1));
+document.getElementById('col-minus').addEventListener('click', () => modifyCols(-1));
+document.getElementById('row-top-plus').addEventListener('click',  () => modifyRows(1,  'top'));
+document.getElementById('row-top-minus').addEventListener('click', () => modifyRows(-1, 'top'));
+document.getElementById('row-bot-plus').addEventListener('click',  () => modifyRows(1,  'bottom'));
+document.getElementById('row-bot-minus').addEventListener('click', () => modifyRows(-1, 'bottom'));
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  if (confirm('清除所有音符？')) {
+    state.gridData.forEach(col => col.fill(false));
+    drawGrid(); saveLocal();
+  }
+});
+document.getElementById('export-btn').addEventListener('click', exportJSON);
+document.getElementById('import-btn').addEventListener('click', () => {
+  document.getElementById('import-file').click();
+});
+document.getElementById('import-file').addEventListener('change', importJSON);
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && document.getElementById('overlay').style.display === 'none') {
+    e.preventDefault();
+    togglePlay();
+  }
+});
+
+window.addEventListener('resize', () => {
+  buildRowLabels();
+  drawGrid();
+});
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+function init() {
+  const loaded = loadLocal();
+  if (!loaded) initGridData();
+  rebuildAll();
+}
+
+init();
+</script>
+</body>
+</html>
