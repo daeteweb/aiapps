@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - 'apps/**'
-  workflow_dispatch: # 讓你可以手動點擊按鈕執行
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,24 +15,48 @@ jobs:
 
       - name: Generate Metadata Filelist
         run: |
-          echo "Scanning apps folder..."
-          echo "[" > filelist.json
-          FIRST=true
-          # 遍歷 apps 資料夾下的所有 html
-          for f in apps/*.html; do
-            if [ -e "$f" ]; then
-              # 嘗試抓取標題，抓不到就用檔案名稱代替
-              TITLE=$(grep -oP '(?<=<title>).*?(?=</title>)' "$f" | head -1 || echo "")
-              if [ -z "$TITLE" ]; then
-                TITLE=$(basename "$f")
-              fi
-              
-              if [ "$FIRST" = true ]; then FIRST=false; else echo "," >> filelist.json; fi
-              echo "{\"path\": \"$f\", \"title\": \"$TITLE\"}" >> filelist.json
-            fi
-          done
-          echo "]" >> filelist.json
-          cat filelist.json # 在 Log 裡印出來檢查
+          python3 << 'EOF'
+          import json, glob, re, os
+
+          # 讀取舊的 filelist.json，保留已填寫的 description
+          old_descriptions = {}
+          if os.path.exists('filelist.json'):
+              try:
+                  with open('filelist.json', 'r', encoding='utf-8') as f:
+                      old_data = json.load(f)
+                  for item in old_data:
+                      if item.get('description', '').strip():
+                          old_descriptions[item['path']] = item['description']
+              except Exception as e:
+                  print(f"警告：無法讀取舊的 filelist.json：{e}")
+
+          # 掃描 apps/*.html
+          result = []
+          for filepath in sorted(glob.glob('apps/*.html')):
+              try:
+                  with open(filepath, 'r', encoding='utf-8') as f:
+                      content = f.read()
+              except Exception as e:
+                  print(f"警告：無法讀取 {filepath}：{e}")
+                  continue
+
+              # 抓取 <title>
+              match = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+              title = match.group(1).strip() if match else os.path.basename(filepath)
+
+              result.append({
+                  "path": filepath,
+                  "title": title,
+                  "description": old_descriptions.get(filepath, "")
+              })
+
+          # 寫出新的 filelist.json
+          with open('filelist.json', 'w', encoding='utf-8') as f:
+              json.dump(result, f, ensure_ascii=False, indent=2)
+
+          print("✅ filelist.json 已更新：")
+          print(json.dumps(result, ensure_ascii=False, indent=2))
+          EOF
 
       - name: Commit and push
         run: |
