@@ -4,87 +4,452 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 小程式收藏盒</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
     <style>
-        :root { --sidebar-width: 260px; }
-        body { display: flex; margin: 0; height: 100vh; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: #fff; }
-        
-        /* 側邊欄樣式 */
-        #sidebar { 
-            width: var(--sidebar-width); 
-            background: #f8f9fa; 
-            border-right: 1px solid #dee2e6; 
-            overflow-y: auto; 
-            display: flex; 
-            flex-direction: column;
+        :root {
+            --sidebar-width: 270px;
+            --tab-width: 36px;
+            --accent: #4f8ef7;
+            --accent-dark: #2563eb;
+            --sidebar-bg: #1e2230;
+            --sidebar-text: #e2e8f0;
+            --sidebar-hover: #2d3348;
+            --sidebar-border: #2d3650;
+            --tab-bg: #2d3348;
+            --tab-text: #94a3b8;
+            --tooltip-bg: #1e2230;
+            --tooltip-text: #e2e8f0;
+            --badge-bg: #4b5568;
+            --badge-text: #fff;
+            --overlay-bg: rgba(0,0,0,0.35);
+            --transition: 0.28s cubic-bezier(.4,0,.2,1);
         }
-        .sidebar-header { padding: 20px; border-bottom: 2px solid #eee; font-weight: bold; font-size: 1.2rem; color: #333; }
-        #menu { padding: 10px 0; }
-        .nav-item { 
-            display: block; 
-            padding: 12px 20px; 
-            color: #495057; 
-            text-decoration: none; 
-            transition: 0.2s;
-            border-left: 4px solid transparent;
-        }
-        .nav-item:hover { background: #e9ecef; color: #007bff; border-left: 4px solid #007bff; }
-        
-        /* 右側主視窗 */
-        #main { flex: 1; border: none; background: #fff; }
 
-        /* 手機版適應 (螢幕寬度小於 768px) */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            display: flex;
+            height: 100vh;
+            font-family: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+            background: #f0f4f8;
+            overflow: hidden;
+        }
+
+        /* ── 遮罩 ── */
+        #overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: var(--overlay-bg);
+            z-index: 100;
+            backdrop-filter: blur(2px);
+        }
+        #overlay.show { display: block; }
+
+        /* ── Sidebar ── */
+        #sidebar {
+            position: fixed;
+            top: 0; left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--sidebar-bg);
+            display: flex;
+            flex-direction: column;
+            z-index: 200;
+            transform: translateX(-100%);
+            transition: transform var(--transition);
+            box-shadow: 4px 0 32px rgba(0,0,0,0.3);
+        }
+        #sidebar.open { transform: translateX(0); }
+
+        .sidebar-header {
+            padding: 22px 20px 16px;
+            border-bottom: 1px solid var(--sidebar-border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar-header-icon {
+            font-size: 1.4rem;
+        }
+        .sidebar-header-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--sidebar-text);
+            letter-spacing: 0.04em;
+        }
+        .sidebar-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: var(--tab-text);
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 6px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .sidebar-close:hover { background: var(--sidebar-hover); color: #fff; }
+
+        #menu {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 0 16px;
+        }
+        #menu::-webkit-scrollbar { width: 4px; }
+        #menu::-webkit-scrollbar-track { background: transparent; }
+        #menu::-webkit-scrollbar-thumb { background: #3a4060; border-radius: 4px; }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 20px;
+            color: var(--sidebar-text);
+            text-decoration: none;
+            transition: background 0.15s, color 0.15s, border-left 0.15s;
+            border-left: 3px solid transparent;
+            font-size: 0.93rem;
+            cursor: pointer;
+        }
+        .nav-item:hover {
+            background: var(--sidebar-hover);
+            color: #fff;
+            border-left: 3px solid var(--accent);
+        }
+        .nav-item.active {
+            background: var(--sidebar-hover);
+            color: #fff;
+            border-left: 3px solid var(--accent);
+        }
+        .nav-item-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* ── ？badge ── */
+        .help-badge {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: var(--badge-bg);
+            color: var(--badge-text);
+            font-size: 0.7rem;
+            font-weight: 700;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.15s;
+            user-select: none;
+        }
+        .help-badge:hover { background: var(--accent); }
+
+        /* tooltip */
+        .tooltip-bubble {
+            display: none;
+            position: absolute;
+            left: calc(100% + 10px);
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--tooltip-bg);
+            color: var(--tooltip-text);
+            border: 1px solid var(--sidebar-border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.82rem;
+            white-space: nowrap;
+            max-width: 200px;
+            white-space: normal;
+            z-index: 500;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            line-height: 1.5;
+        }
+        .tooltip-bubble::before {
+            content: '';
+            position: absolute;
+            right: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 6px solid transparent;
+            border-right-color: var(--sidebar-border);
+        }
+        .tooltip-bubble.show { display: block; }
+
+        .tooltip-close {
+            display: none;
+            float: right;
+            margin-left: 8px;
+            font-size: 0.75rem;
+            color: var(--tab-text);
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .tooltip-close:hover { color: #fff; }
+
+        /* ── 漢堡 Tab ── */
+        #menu-tab {
+            position: fixed;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 150;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            width: var(--tab-width);
+            padding: 14px 0;
+            background: var(--tab-bg);
+            color: var(--tab-text);
+            border-radius: 0 10px 10px 0;
+            cursor: pointer;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.2);
+            transition: background var(--transition), color var(--transition), opacity var(--transition);
+            user-select: none;
+        }
+        #menu-tab:hover { background: var(--accent-dark); color: #fff; }
+        #menu-tab.hidden { opacity: 0; pointer-events: none; }
+
+        .tab-icon { font-size: 1.1rem; line-height: 1; }
+        .tab-label {
+            writing-mode: vertical-rl;
+            text-orientation: upright;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            font-weight: 600;
+        }
+
+        /* ── 主頁面 ── */
+        #main-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin-left: 0;
+        }
+
+        #main {
+            flex: 1;
+            border: none;
+            background: #fff;
+            display: block;
+        }
+
+        /* README 渲染區 */
+        #readme-view {
+            flex: 1;
+            overflow-y: auto;
+            padding: 48px 10vw;
+            background: #fff;
+            display: none;
+        }
+        #readme-view.show { display: block; }
+        #readme-view h1 { font-size: 2rem; margin-bottom: 0.5em; color: #1a202c; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4em; }
+        #readme-view h2 { font-size: 1.4rem; margin: 1.5em 0 0.5em; color: #2d3748; }
+        #readme-view h3 { font-size: 1.1rem; margin: 1.2em 0 0.4em; color: #4a5568; }
+        #readme-view p { color: #4a5568; line-height: 1.8; margin-bottom: 0.8em; }
+        #readme-view ul, #readme-view ol { padding-left: 1.5em; color: #4a5568; line-height: 1.8; margin-bottom: 0.8em; }
+        #readme-view code { background: #f0f4f8; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; color: #e53e3e; font-family: monospace; }
+        #readme-view pre { background: #1e2230; color: #e2e8f0; padding: 16px 20px; border-radius: 10px; overflow-x: auto; margin-bottom: 1em; }
+        #readme-view pre code { background: none; color: inherit; padding: 0; }
+        #readme-view blockquote { border-left: 4px solid var(--accent); padding: 8px 16px; background: #f7faff; color: #4a5568; margin-bottom: 0.8em; border-radius: 0 6px 6px 0; }
+        #readme-view a { color: var(--accent); text-decoration: none; }
+        #readme-view a:hover { text-decoration: underline; }
+        #readme-view img { max-width: 100%; border-radius: 8px; }
+        #readme-view table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
+        #readme-view th, #readme-view td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
+        #readme-view th { background: #f0f4f8; font-weight: 600; }
+        #readme-view::-webkit-scrollbar { width: 6px; }
+        #readme-view::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 4px; }
+
+        /* ── 手機 ── */
         @media (max-width: 768px) {
-            body { flex-direction: column; }
-            #sidebar { width: 100%; height: 100vh; border-right: none; }
-            #main { display: none; } /* 手機版不使用 iframe，直接開新分頁 */
-            .sidebar-header { text-align: center; }
+            #main { display: none; }
+            #readme-view { padding: 24px 5vw; }
+            .tooltip-bubble {
+                left: auto;
+                right: calc(100% + 10px);
+                top: 50%;
+            }
+            .tooltip-bubble::before {
+                right: auto;
+                left: 100%;
+                border-right-color: transparent;
+                border-left-color: var(--sidebar-border);
+            }
+            .tooltip-close { display: inline; }
         }
     </style>
 </head>
 <body>
 
+<!-- 遮罩 -->
+<div id="overlay"></div>
+
+<!-- Sidebar -->
 <div id="sidebar">
-    <div class="sidebar-header">我的 AI 程式集</div>
+    <div class="sidebar-header">
+        <span class="sidebar-header-icon">🤖</span>
+        <span class="sidebar-header-title">我的 AI 程式集</span>
+        <button class="sidebar-close" id="sidebar-close-btn" title="關閉">✕</button>
+    </div>
     <div id="menu">讀取中...</div>
 </div>
 
-<iframe id="main" name="main-frame" src="about:blank"></iframe>
+<!-- 漢堡 Tab -->
+<div id="menu-tab">
+    <span class="tab-icon">☰</span>
+    <span class="tab-label">選單</span>
+</div>
+
+<!-- 主視窗 -->
+<div id="main-wrap">
+    <div id="readme-view"></div>
+    <iframe id="main" name="main-frame" src="about:blank"></iframe>
+</div>
 
 <script>
-    // 偵測裝置類型
-    const isMobile = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768);
+    const isMobile = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
 
-async function loadMenu() {
-    const menu = document.getElementById('menu');
-    try {
-        const response = await fetch('filelist.json');
-        const data = await response.json();
-        const mobileMode = isMobile();
-        
-        menu.innerHTML = '';
-        data.forEach(item => {
-            const a = document.createElement('a');
-            // item.path 現在會是 "apps/your-app.html"
-            a.href = item.path; 
-            a.textContent = item.title;
-            a.className = 'nav-item';
-            
-            if (mobileMode) {
-                a.target = '_blank';
-            } else {
-                a.target = 'main-frame';
-            }
-            menu.appendChild(a);
-        });
+    // ── Sidebar 開關 ──
+    const sidebar  = document.getElementById('sidebar');
+    const overlay  = document.getElementById('overlay');
+    const menuTab  = document.getElementById('menu-tab');
+    const closeBtn = document.getElementById('sidebar-close-btn');
 
-        if (!mobileMode && data.length > 0) {
-            document.getElementById('main').src = data[0].path;
-        }
-    } catch (err) {
-        menu.innerHTML = '<div style="padding:20px; color:red;">請確認 apps/ 資料夾內是否有 HTML 檔案。</div>';
+    function openSidebar() {
+        sidebar.classList.add('open');
+        overlay.classList.add('show');
+        menuTab.classList.add('hidden');
     }
-}
-loadMenu();
+    function closeSidebar() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('show');
+        menuTab.classList.remove('hidden');
+    }
+
+    menuTab.addEventListener('click', openSidebar);
+    closeBtn.addEventListener('click', closeSidebar);
+    overlay.addEventListener('click', closeSidebar);
+
+    // ── README 渲染 ──
+    const readmeView = document.getElementById('readme-view');
+    const mainFrame  = document.getElementById('main');
+
+    function showReadme() {
+        readmeView.classList.add('show');
+        mainFrame.style.display = 'none';
+        fetch('README.md')
+            .then(r => r.text())
+            .then(md => { readmeView.innerHTML = marked.parse(md); })
+            .catch(() => {
+                readmeView.innerHTML = '<p style="color:#999; padding:20px;">找不到 README.md，請確認檔案存在於根目錄。</p>';
+            });
+    }
+
+    function showApp(path) {
+        readmeView.classList.remove('show');
+        mainFrame.style.display = 'block';
+        mainFrame.src = path;
+    }
+
+    // ── 選單載入 ──
+    async function loadMenu() {
+        const menu = document.getElementById('menu');
+        try {
+            const response = await fetch('filelist.json');
+            const data = await response.json();
+            const mobile = isMobile();
+
+            menu.innerHTML = '';
+
+            // 關閉所有 tooltip
+            document.addEventListener('click', (e) => {
+                document.querySelectorAll('.tooltip-bubble.show').forEach(t => {
+                    if (!t.contains(e.target) && !t.previousElementSibling?.contains(e.target)) {
+                        t.classList.remove('show');
+                    }
+                });
+            });
+
+            data.forEach(item => {
+                const navItem = document.createElement('div');
+                navItem.className = 'nav-item';
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'nav-item-title';
+                titleSpan.textContent = item.title;
+
+                // ？badge
+                const badge = document.createElement('span');
+                badge.className = 'help-badge';
+                badge.textContent = '?';
+
+                const tooltip = document.createElement('div');
+                tooltip.className = 'tooltip-bubble';
+
+                const desc = item.description && item.description.trim() !== ''
+                    ? item.description
+                    : '尚無說明';
+
+                if (mobile) {
+                    const closeX = document.createElement('span');
+                    closeX.className = 'tooltip-close';
+                    closeX.textContent = '✕';
+                    closeX.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        tooltip.classList.remove('show');
+                    });
+                    tooltip.appendChild(closeX);
+                }
+
+                tooltip.appendChild(document.createTextNode(desc));
+                badge.appendChild(tooltip);
+
+                // badge 點擊 / hover
+                if (mobile) {
+                    badge.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const isOpen = tooltip.classList.contains('show');
+                        document.querySelectorAll('.tooltip-bubble.show').forEach(t => t.classList.remove('show'));
+                        if (!isOpen) tooltip.classList.add('show');
+                    });
+                } else {
+                    badge.addEventListener('mouseenter', () => tooltip.classList.add('show'));
+                    badge.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+                }
+
+                navItem.appendChild(titleSpan);
+                navItem.appendChild(badge);
+
+                // 點選 APP
+                navItem.addEventListener('click', (e) => {
+                    if (e.target === badge || badge.contains(e.target)) return;
+
+                    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                    navItem.classList.add('active');
+
+                    if (mobile) {
+                        window.open(item.path, '_blank');
+                    } else {
+                        showApp(item.path);
+                    }
+                    closeSidebar();
+                });
+
+                menu.appendChild(navItem);
+            });
+
+            // 預設開啟 README
+            if (!mobile) showReadme();
+
+        } catch (err) {
+            menu.innerHTML = '<div style="padding:20px; color:#f87171;">讀取 filelist.json 失敗，請確認 apps/ 資料夾與設定。</div>';
+            if (!isMobile()) showReadme();
+        }
+    }
+
+    loadMenu();
 </script>
 
 </body>
