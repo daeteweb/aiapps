@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>秘密花園 🌿</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --grass-dark: #2d5a27;
+            --grass-mid: #3d7a35;
+            --grass-light: #5a9e50;
+            --soil: #6b4423;
+            --panel-bg: rgba(255, 252, 240, 0.97);
+            --panel-border: rgba(90, 158, 80, 0.3);
+            --accent: #2d5a27;
+            --gold: #c8960c;
+            --text: #2a1f0e;
+            --hint: #6b7c69;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'Noto Serif TC', serif;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            cursor: crosshair;
+        }
+
+        /* ── 草地背景 ── */
+        #bg-canvas {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+        }
+
+        #main-canvas {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        /* ── 頂部 HUD ── */
+        #hud {
+            position: fixed; top: 0; left: 0; right: 0;
+            z-index: 10;
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 16px;
+            background: linear-gradient(to bottom, rgba(22, 45, 18, 0.85) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .hud-pill {
+            background: var(--panel-bg);
+            border: 1.5px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 13px;
+            color: var(--text);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            white-space: nowrap;
+            pointer-events: auto;
+            font-family: 'Noto Serif TC', serif;
+        }
+
+        #collection-btn {
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            background: var(--panel-bg);
+        }
+        #collection-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 18px rgba(0,0,0,0.2);
+        }
+        #collection-btn:active { transform: scale(0.96); }
+
+        .hud-label { color: var(--hint); font-size: 11px; }
+        .hud-value { font-weight: 700; color: var(--accent); }
+
+        /* 進度條在 HUD 裡 */
+        #progress-track {
+            flex: 1; height: 6px;
+            background: rgba(255,255,255,0.25);
+            border-radius: 3px; overflow: hidden;
+            max-width: 200px;
+        }
+        #progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #5a9e50, #c8960c);
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* ── 圖鑑面板 ── */
+        #overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 30, 12, 0.6);
+            backdrop-filter: blur(4px);
+            display: none; z-index: 100;
+        }
+
+        #pokedex {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.92);
+            width: min(92vw, 460px);
+            max-height: 82vh;
+            background: var(--panel-bg);
+            border-radius: 24px;
+            padding: 24px;
+            display: none;
+            flex-direction: column;
+            z-index: 101;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.35);
+            border: 1.5px solid var(--panel-border);
+            opacity: 0;
+            transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s;
+        }
+        #pokedex.open {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+
+        #pokedex-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        #pokedex h2 {
+            margin: 0;
+            font-size: 1.25rem;
+            color: var(--text);
+            font-family: 'Caveat', cursive;
+            font-size: 1.5rem;
+            letter-spacing: 0.02em;
+        }
+
+        #dex-rate {
+            font-size: 13px; color: var(--hint);
+            font-family: 'Noto Serif TC', serif;
+        }
+
+        /* 稀有度分組標籤 */
+        .rarity-section { margin-top: 14px; }
+        .rarity-label {
+            font-size: 11px; font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .rarity-label.common  { background: #e8f5e9; color: #388e3c; }
+        .rarity-label.rare    { background: #e3f2fd; color: #1565c0; }
+        .rarity-label.epic    { background: #f3e5f5; color: #7b1fa2; }
+        .rarity-label.legendary { background: #fff8e1; color: #f57f17; }
+        .rarity-label.hidden  { background: #fce4ec; color: #880e4f; border: 1px dashed #880e4f; }
+
+        #pokedex-scroll {
+            overflow-y: auto; flex: 1;
+            padding-right: 4px;
+        }
+        #pokedex-scroll::-webkit-scrollbar { width: 4px; }
+        #pokedex-scroll::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+
+        .dex-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+        }
+
+        .slot {
+            aspect-ratio: 1;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .slot.locked {
+            background: #f0f0ec;
+            border: 1.5px solid #e0e0d8;
+            filter: grayscale(1); opacity: 0.25;
+        }
+        .slot.unlocked {
+            background: white;
+            border: 1.5px solid #d4eacf;
+            box-shadow: 0 2px 8px rgba(90,158,80,0.12);
+        }
+        .slot.unlocked:hover { transform: scale(1.1); box-shadow: 0 4px 14px rgba(0,0,0,0.15); }
+
+        /* 稀有度光環 */
+        .slot.unlocked.rare      { border-color: #90caf9; box-shadow: 0 2px 10px rgba(33,150,243,0.2); }
+        .slot.unlocked.epic      { border-color: #ce93d8; box-shadow: 0 2px 10px rgba(156,39,176,0.2); }
+        .slot.unlocked.legendary { border-color: #ffd54f; box-shadow: 0 2px 14px rgba(255,213,79,0.35); }
+        .slot.unlocked.hidden-slot { border: 2px dashed #f06292; box-shadow: 0 2px 14px rgba(240,98,146,0.25); }
+
+        .slot .count-badge {
+            position: absolute; bottom: 2px; right: 4px;
+            font-size: 8px; color: var(--hint);
+            font-family: 'Noto Serif TC', serif;
+            line-height: 1;
+        }
+
+        #close-pokedex {
+            margin-top: 16px;
+            padding: 10px;
+            border: none;
+            background: var(--grass-dark);
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Noto Serif TC', serif;
+            font-size: 14px;
+            transition: background 0.15s;
+            flex-shrink: 0;
+        }
+        #close-pokedex:hover { background: var(--grass-mid); }
+
+        /* ── 解鎖通知 Toast ── */
+        #toast-container {
+            position: fixed; bottom: 24px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: flex; flex-direction: column; gap: 8px;
+            align-items: center; pointer-events: none;
+        }
+        .toast {
+            background: var(--text);
+            color: white;
+            padding: 9px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-family: 'Noto Serif TC', serif;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            animation: toastIn 0.3s cubic-bezier(0.34,1.56,0.64,1), toastOut 0.4s 2.6s forwards;
+            white-space: nowrap;
+        }
+        .toast.legendary-toast {
+            background: linear-gradient(135deg, #7b1fa2, #c8960c);
+            font-size: 14px; padding: 11px 22px;
+        }
+
+        @keyframes toastIn  { from { opacity:0; transform:translateY(12px) scale(0.9); } to { opacity:1; transform:translateY(0) scale(1); } }
+        @keyframes toastOut { from { opacity:1; } to { opacity:0; transform:translateY(-8px); } }
+
+        /* ── 100% 達成彩帶 ── */
+        #confetti-canvas {
+            position: fixed; inset: 0;
+            pointer-events: none; z-index: 300;
+        }
+
+        /* 提示文字 */
+        #hint-text {
+            position: fixed;
+            bottom: 20px; right: 20px;
+            font-family: 'Caveat', cursive;
+            font-size: 16px;
+            color: rgba(255,255,255,0.6);
+            pointer-events: none;
+            z-index: 10;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<canvas id="main-canvas"></canvas>
+<canvas id="confetti-canvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+    <div class="hud-pill" id="collection-btn">
+        📖 <span class="hud-label">圖鑑</span>
+        <span class="hud-value" id="rate-text">0%</span>
+    </div>
+    <div id="progress-track"><div id="progress-fill"></div></div>
+    <div class="hud-pill">
+        🐾 <span class="hud-label">召喚</span>
+        <span class="hud-value" id="spawn-count">0</span>
+    </div>
+    <div class="hud-pill">
+        🌿 <span class="hud-label">在場</span>
+        <span class="hud-value" id="alive-count">0</span>
+    </div>
+</div>
+
+<!-- 圖鑑 -->
+<div id="overlay"></div>
+<div id="pokedex">
+    <div id="pokedex-header">
+        <h2>🌿 秘密花園圖鑑</h2>
+        <span id="dex-rate">0 / 0</span>
+    </div>
+    <div id="pokedex-scroll">
+        <!-- 動態生成 -->
+    </div>
+    <button id="close-pokedex">✕ 回到花園</button>
+</div>
+
+<div id="toast-container"></div>
+<div id="hint-text">點擊螢幕呼喚動物</div>
+
+<script>
+// ═══════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════
+const CONFIG = {
+    MAX_ANIMALS: 20,
+    SPAWN_COOLDOWN: 200,        // ms，每秒最多5隻
+    BASE_SPEED: 0.5,
+    PANIC_ACCEL: 0.07,
+    PANIC_MAX_SPEED: 5.5,
+    SOCIAL_PROB: 0.004,         // 0.4% 每幀碰撞觸發（很低）
+    SOCIAL_FRAMES: 280,         // 交流持續幀數
+    IDLE_TIME: 60000,
+    AUTO_INTERVAL: 10000,
+    SAVE_KEY: 'secret_garden_v1',
+    PROB: { COMMON: 0.82, RARE: 0.15, EPIC: 0.025, LEGENDARY: 0.005 }
+};
+
+// ═══════════════════════════════════════
+//  ANIMAL POOLS  (修正：清除所有非emoji文字)
+// ═══════════════════════════════════════
+const POOLS = {
+    COMMON:    ['🐈','🐕','🐇','🐥','🐭','🐹','🦆','🐦','🐸','🐢'],
+    RARE:      ['🦊','🐨','🦁','🐯','🦓','🦒','🦘','🐼','🐿️','🦦'],
+    EPIC:      ['🦄','🐲','🐙','🦚','🐋','🐘','🦖','🐆'],
+    LEGENDARY: ['👽','👻','👾','🐉','🧙','🧛','🧜'],
+    HIDDEN:    '🤖'
+};
+
+const BASE_ALL = [
+    ...POOLS.COMMON,
+    ...POOLS.RARE,
+    ...POOLS.EPIC,
+    ...POOLS.LEGENDARY
+];
+
+const RARITY_OF = {};
+POOLS.COMMON.forEach(e    => RARITY_OF[e] = 'common');
+POOLS.RARE.forEach(e      => RARITY_OF[e] = 'rare');
+POOLS.EPIC.forEach(e      => RARITY_OF[e] = 'epic');
+POOLS.LEGENDARY.forEach(e => RARITY_OF[e] = 'legendary');
+RARITY_OF[POOLS.HIDDEN]   = 'hidden';
+
+const EMOJI_SIZE = { common:30, rare:32, epic:36, legendary:40, hidden:40 };
+
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+let save = JSON.parse(localStorage.getItem(CONFIG.SAVE_KEY) || '{"unlocked":[],"counts":{}}');
+// 相容舊存檔格式
+if (Array.isArray(save)) save = { unlocked: save, counts: {} };
+if (!save.counts) save.counts = {};
+
+let isRobotUnlocked = save.unlocked.length >= BASE_ALL.length;
+let totalSpawned = 0;
+let lastSpawnTime = 0;
+let lastAction = Date.now();
+let autoTimer = null;
+let animals = [];
+
+function persist() {
+    localStorage.setItem(CONFIG.SAVE_KEY, JSON.stringify(save));
+}
+
+// ═══════════════════════════════════════
+//  CANVAS SETUP
+// ═══════════════════════════════════════
+const bgCanvas  = document.getElementById('bg-canvas');
+const bgCtx     = bgCanvas.getContext('2d');
+const canvas    = document.getElementById('main-canvas');
+const ctx       = canvas.getContext('2d');
+const confCanvas = document.getElementById('confetti-canvas');
+const confCtx   = confCanvas.getContext('2d');
+
+function resize() {
+    bgCanvas.width = canvas.width = confCanvas.width = window.innerWidth;
+    bgCanvas.height = canvas.height = confCanvas.height = window.innerHeight;
+    drawBackground();
+}
+window.addEventListener('resize', resize);
+
+// ═══════════════════════════════════════
+//  BACKGROUND  (草地風格)
+// ═══════════════════════════════════════
+function drawBackground() {
+    const w = bgCanvas.width, h = bgCanvas.height;
+
+    // 漸層天空→草地
+    const grad = bgCtx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0,   '#d4f0c0');
+    grad.addColorStop(0.4, '#b8e6a0');
+    grad.addColorStop(1,   '#7db86a');
+    bgCtx.fillStyle = grad;
+    bgCtx.fillRect(0, 0, w, h);
+
+    // 草叢紋理（隨機小草）
+    bgCtx.save();
+    const seed = 42;
+    const lcg = (s) => { let x = s; return () => { x = (1664525*x + 1013904223) & 0xffffffff; return (x >>> 0) / 0xffffffff; }; };
+    const rand = lcg(seed);
+
+    for (let i = 0; i < 300; i++) {
+        const gx = rand() * w;
+        const gy = rand() * h;
+        const gh = 6 + rand() * 10;
+        const gw = 1.5 + rand() * 1.5;
+        const green = Math.floor(rand() * 60 + 60);
+        bgCtx.fillStyle = `rgba(30, ${green}, 20, 0.18)`;
+        bgCtx.beginPath();
+        bgCtx.ellipse(gx, gy, gw, gh, rand() * 0.5 - 0.25, 0, Math.PI * 2);
+        bgCtx.fill();
+    }
+
+    // 圓形光斑（日照感）
+    for (let i = 0; i < 5; i++) {
+        const lx = rand() * w, ly = rand() * h * 0.7;
+        const lg = bgCtx.createRadialGradient(lx, ly, 0, lx, ly, 80 + rand() * 120);
+        lg.addColorStop(0, 'rgba(255,255,200,0.07)');
+        lg.addColorStop(1, 'transparent');
+        bgCtx.fillStyle = lg;
+        bgCtx.fillRect(0, 0, w, h);
+    }
+
+    bgCtx.restore();
+}
+
+// ═══════════════════════════════════════
+//  ANIMAL CLASS
+// ═══════════════════════════════════════
+class Animal {
+    constructor() {
+        // 全螢幕隨機位置（避免邊緣10%）
+        this.x = canvas.width  * (0.1 + Math.random() * 0.8);
+        this.y = canvas.height * (0.1 + Math.random() * 0.8);
+
+        this.emoji  = this.roll();
+        this.rarity = RARITY_OF[this.emoji] || 'common';
+        this.size   = EMOJI_SIZE[this.rarity] || 30;
+
+        // 移動向量
+        const angle = Math.random() * Math.PI * 2;
+        this.baseSpeed = CONFIG.BASE_SPEED + Math.random() * 0.4;
+        this.vx = Math.cos(angle) * this.baseSpeed;
+        this.vy = Math.sin(angle) * this.baseSpeed;
+
+        // 狀態
+        this.state      = 'WANDER'; // WANDER | SOCIAL | PANIC
+        this.isPanic    = false;    // 一旦設 true 就不可逆
+        this.curSpeed   = this.baseSpeed;
+
+        // 社交
+        this.socialTimer  = 0;
+        this.bubbleText   = '';
+        this.partner      = null;
+
+        // 新動物解鎖
+        this.registerUnlock();
+    }
+
+    roll() {
+        // 隱藏款機器人（已解鎖全圖鑑才可能出現）
+        if (isRobotUnlocked && Math.random() < 0.02) return POOLS.HIDDEN;
+
+        const r = Math.random();
+        if (r < CONFIG.PROB.LEGENDARY) {
+            return POOLS.LEGENDARY[Math.floor(Math.random() * POOLS.LEGENDARY.length)];
+        } else if (r < CONFIG.PROB.LEGENDARY + CONFIG.PROB.EPIC) {
+            return POOLS.EPIC[Math.floor(Math.random() * POOLS.EPIC.length)];
+        } else if (r < CONFIG.PROB.LEGENDARY + CONFIG.PROB.EPIC + CONFIG.PROB.RARE) {
+            return POOLS.RARE[Math.floor(Math.random() * POOLS.RARE.length)];
+        } else {
+            return POOLS.COMMON[Math.floor(Math.random() * POOLS.COMMON.length)];
+        }
+    }
+
+    registerUnlock() {
+        const isNew = !save.unlocked.includes(this.emoji);
+        save.counts[this.emoji] = (save.counts[this.emoji] || 0) + 1;
+
+        if (isNew) {
+            save.unlocked.push(this.emoji);
+            persist();
+
+            // 檢查是否剛解鎖機器人條件
+            if (!isRobotUnlocked && save.unlocked.length >= BASE_ALL.length) {
+                isRobotUnlocked = true;
+                showToast('🤖 隱藏生物「機器人」已解鎖！', true);
+            } else {
+                const label = { common:'普通', rare:'稀有', epic:'史詩', legendary:'傳說', hidden:'隱藏' };
+                showToast(`✨ 新發現！${this.emoji} (${label[this.rarity] || ''})`, this.rarity === 'legendary' || this.rarity === 'hidden');
+            }
+            updateUI();
+        } else {
+            persist();
+        }
+    }
+
+    // ── 繪製 ──
+    draw() {
+        ctx.save();
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+
+        // 社交氣泡（固定不閃爍，只有淡入）
+        if (this.state === 'SOCIAL' && this.bubbleText) {
+            this.drawBubble();
+        }
+
+        // 恐慌冒汗
+        if (this.isPanic) {
+            ctx.font = '12px Arial';
+            ctx.fillText('💦', this.x + this.size * 0.55, this.y - this.size * 0.55);
+        }
+
+        // 本體
+        ctx.font = `${this.size}px Arial`;
+        ctx.fillText(this.emoji, this.x, this.y);
+
+        ctx.restore();
+    }
+
+    drawBubble() {
+        const bx = this.x, by = this.y - this.size * 0.9 - 22;
+        const bw = 44, bh = 28, br = 8;
+
+        // 陰影
+        ctx.shadowColor = 'rgba(0,0,0,0.15)';
+        ctx.shadowBlur = 6;
+
+        // 背景
+        ctx.fillStyle = 'rgba(255, 252, 235, 0.97)';
+        ctx.strokeStyle = 'rgba(180, 160, 100, 0.4)';
+        ctx.lineWidth = 1.2;
+
+        ctx.beginPath();
+        ctx.roundRect(bx - bw/2, by - bh/2, bw, bh, br);
+        ctx.fill();
+        ctx.stroke();
+
+        // 小尾巴
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255, 252, 235, 0.97)';
+        ctx.beginPath();
+        ctx.moveTo(bx - 5, by + bh/2);
+        ctx.lineTo(bx,     by + bh/2 + 8);
+        ctx.lineTo(bx + 5, by + bh/2);
+        ctx.fill();
+
+        // 邊框小尾巴
+        ctx.strokeStyle = 'rgba(180,160,100,0.3)';
+        ctx.beginPath();
+        ctx.moveTo(bx - 5, by + bh/2);
+        ctx.lineTo(bx,     by + bh/2 + 8);
+        ctx.lineTo(bx + 5, by + bh/2);
+        ctx.stroke();
+
+        // 內容
+        ctx.shadowBlur = 0;
+        ctx.font = '16px Arial';
+        ctx.fillStyle = 'rgba(0,0,0,0.85)';
+        ctx.fillText(this.bubbleText, bx, by);
+    }
+
+    // ── 更新 ──
+    update() {
+        // 觸發恐慌（不可逆）
+        if (!this.isPanic && animals.length > CONFIG.MAX_ANIMALS) {
+            this.isPanic = true;
+            this.state = 'WANDER';
+            this.partner = null;
+        }
+
+        if (this.isPanic) {
+            // 平滑加速
+            if (this.curSpeed < CONFIG.PANIC_MAX_SPEED) {
+                this.curSpeed = Math.min(this.curSpeed + CONFIG.PANIC_ACCEL, CONFIG.PANIC_MAX_SPEED);
+            }
+            // 方向維持，直線衝出
+            this.x += this.vx / this.baseSpeed * this.curSpeed;
+            this.y += this.vy / this.baseSpeed * this.curSpeed;
+
+        } else if (this.state === 'WANDER') {
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // 隨機緩轉向（自然感）
+            if (Math.random() < 0.008) {
+                const angle = (Math.random() - 0.5) * 0.35;
+                const c = Math.cos(angle), s = Math.sin(angle);
+                const nx = this.vx * c - this.vy * s;
+                const ny = this.vx * s + this.vy * c;
+                this.vx = nx; this.vy = ny;
+            }
+
+        } else if (this.state === 'SOCIAL') {
+            this.socialTimer--;
+            if (this.socialTimer <= 0) {
+                this.state = 'WANDER';
+                this.bubbleText = '';
+                this.partner = null;
+            }
+        }
+
+        // 離場判定
+        const margin = 80;
+        return (
+            this.x > -margin && this.x < canvas.width  + margin &&
+            this.y > -margin && this.y < canvas.height + margin
+        );
+    }
+}
+
+// ═══════════════════════════════════════
+//  COLLISION / SOCIAL
+// ═══════════════════════════════════════
+const BUBBLES_NORMAL    = ['💬','❤️','🎵','💡','❕','🌸'];
+const BUBBLES_RARE      = ['✨','🔮','🌟','💎'];
+const BUBBLES_LEGENDARY = ['👑','🔥','💎','🌈','⚡'];
+const BUBBLES_ROBOT     = ['01','#!','??','[]'];
+
+function getBubble(a) {
+    if (a.emoji === POOLS.HIDDEN) return BUBBLES_ROBOT[Math.floor(Math.random()*BUBBLES_ROBOT.length)];
+    if (a.rarity === 'legendary') return BUBBLES_LEGENDARY[Math.floor(Math.random()*BUBBLES_LEGENDARY.length)];
+    if (a.rarity === 'epic')      return BUBBLES_RARE[Math.floor(Math.random()*BUBBLES_RARE.length)];
+    return BUBBLES_NORMAL[Math.floor(Math.random()*BUBBLES_NORMAL.length)];
+}
+
+function checkSocial() {
+    for (let i = 0; i < animals.length; i++) {
+        const a = animals[i];
+        if (a.isPanic || a.state !== 'WANDER') continue;
+
+        for (let j = i + 1; j < animals.length; j++) {
+            const b = animals[j];
+            if (b.isPanic || b.state !== 'WANDER') continue;
+
+            const dist = Math.hypot(a.x - b.x, a.y - b.y);
+            const threshold = (a.size + b.size) * 0.7;
+
+            if (dist < threshold) {
+                if (Math.random() < CONFIG.SOCIAL_PROB) {
+                    a.state = b.state = 'SOCIAL';
+                    a.socialTimer = b.socialTimer = CONFIG.SOCIAL_FRAMES;
+                    a.partner = b; b.partner = a;
+
+                    // 各自顯示不同氣泡
+                    a.bubbleText = getBubble(a);
+                    b.bubbleText = getBubble(b);
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════
+function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    checkSocial();
+
+    animals = animals.filter(a => {
+        const alive = a.update();
+        if (alive) a.draw();
+        return alive;
+    });
+
+    // 掛機偵測
+    const now = Date.now();
+    if (now - lastAction > CONFIG.IDLE_TIME) {
+        if (!autoTimer) {
+            autoTimer = setInterval(() => {
+                if (animals.length < CONFIG.MAX_ANIMALS) {
+                    animals.push(new Animal());
+                    totalSpawned++;
+                    updateHUDCounts();
+                }
+            }, CONFIG.AUTO_INTERVAL);
+        }
+    } else if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+    }
+
+    updateHUDCounts();
+    requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════
+//  UI UPDATES
+// ═══════════════════════════════════════
+function updateHUDCounts() {
+    document.getElementById('alive-count').textContent  = animals.length;
+    document.getElementById('spawn-count').textContent  = totalSpawned;
+}
+
+function updateUI() {
+    const total   = BASE_ALL.length + 1; // +1 for robot
+    const current = save.unlocked.length;
+    const rate    = Math.round((current / total) * 100);
+
+    document.getElementById('rate-text').textContent  = `${rate}%`;
+    document.getElementById('progress-fill').style.width = `${rate}%`;
+    document.getElementById('dex-rate').textContent   = `${current} / ${total}`;
+
+    buildPokedex();
+
+    // 100% 完成特效
+    if (current >= total) triggerConfetti();
+}
+
+function buildPokedex() {
+    const scroll = document.getElementById('pokedex-scroll');
+    scroll.innerHTML = '';
+
+    const sections = [
+        { key: 'COMMON',    label: 'Common 普通',     cls: 'common'    },
+        { key: 'RARE',      label: 'Rare 稀有',        cls: 'rare'      },
+        { key: 'EPIC',      label: 'Epic 史詩',        cls: 'epic'      },
+        { key: 'LEGENDARY', label: 'Legendary 傳說',   cls: 'legendary' },
+    ];
+
+    sections.forEach(({ key, label, cls }) => {
+        const sec = document.createElement('div');
+        sec.className = 'rarity-section';
+
+        const lbl = document.createElement('div');
+        lbl.className = `rarity-label ${cls}`;
+        lbl.textContent = label;
+        sec.appendChild(lbl);
+
+        const grid = document.createElement('div');
+        grid.className = 'dex-grid';
+
+        POOLS[key].forEach(emoji => {
+            const slot = document.createElement('div');
+            const unlocked = save.unlocked.includes(emoji);
+            slot.className = `slot ${unlocked ? `unlocked ${cls}` : 'locked'}`;
+            slot.textContent = emoji;
+
+            if (unlocked && save.counts[emoji] > 1) {
+                const badge = document.createElement('span');
+                badge.className = 'count-badge';
+                badge.textContent = `×${save.counts[emoji]}`;
+                slot.appendChild(badge);
+            }
+            grid.appendChild(slot);
+        });
+
+        sec.appendChild(grid);
+        scroll.appendChild(sec);
+    });
+
+    // 隱藏款
+    const hiddenSec = document.createElement('div');
+    hiddenSec.className = 'rarity-section';
+    const hiddenLbl = document.createElement('div');
+    hiddenLbl.className = 'rarity-label hidden';
+    hiddenLbl.textContent = '? Hidden 隱藏';
+    hiddenSec.appendChild(hiddenLbl);
+
+    const hiddenGrid = document.createElement('div');
+    hiddenGrid.className = 'dex-grid';
+
+    const hSlot = document.createElement('div');
+    const robotUnlocked = save.unlocked.includes(POOLS.HIDDEN);
+    hSlot.className = `slot ${robotUnlocked ? 'unlocked hidden-slot' : 'locked'}`;
+    hSlot.textContent = (isRobotUnlocked || robotUnlocked) ? POOLS.HIDDEN : '？';
+    if (robotUnlocked && save.counts[POOLS.HIDDEN] > 1) {
+        const badge = document.createElement('span');
+        badge.className = 'count-badge';
+        badge.textContent = `×${save.counts[POOLS.HIDDEN]}`;
+        hSlot.appendChild(badge);
+    }
+    hiddenGrid.appendChild(hSlot);
+    hiddenSec.appendChild(hiddenGrid);
+    scroll.appendChild(hiddenSec);
+}
+
+// ═══════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════
+function showToast(msg, isSpecial = false) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast${isSpecial ? ' legendary-toast' : ''}`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3100);
+}
+
+// ═══════════════════════════════════════
+//  CONFETTI
+// ═══════════════════════════════════════
+let confettiPieces = [];
+let confettiRunning = false;
+
+function triggerConfetti() {
+    if (confettiRunning) return;
+    confettiRunning = true;
+    const colors = ['#5a9e50','#c8960c','#e57373','#64b5f6','#ba68c8','#fff176'];
+    for (let i = 0; i < 120; i++) {
+        confettiPieces.push({
+            x: Math.random() * confCanvas.width,
+            y: -10,
+            vx: (Math.random() - 0.5) * 4,
+            vy: 2 + Math.random() * 4,
+            rot: Math.random() * 360,
+            rotV: (Math.random() - 0.5) * 8,
+            w: 8 + Math.random() * 8,
+            h: 4 + Math.random() * 4,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            life: 1
+        });
+    }
+    runConfetti();
+}
+
+function runConfetti() {
+    confCtx.clearRect(0, 0, confCanvas.width, confCanvas.height);
+    confettiPieces = confettiPieces.filter(p => {
+        p.x += p.vx; p.y += p.vy;
+        p.rot += p.rotV; p.vy += 0.08;
+        p.life -= 0.008;
+        confCtx.save();
+        confCtx.globalAlpha = Math.max(0, p.life);
+        confCtx.translate(p.x, p.y);
+        confCtx.rotate(p.rot * Math.PI / 180);
+        confCtx.fillStyle = p.color;
+        confCtx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+        confCtx.restore();
+        return p.life > 0 && p.y < confCanvas.height + 20;
+    });
+    if (confettiPieces.length > 0) requestAnimationFrame(runConfetti);
+    else { confettiRunning = false; confCtx.clearRect(0,0,confCanvas.width,confCanvas.height); }
+}
+
+// ═══════════════════════════════════════
+//  EVENTS
+// ═══════════════════════════════════════
+canvas.addEventListener('mousedown', () => {
+    const now = Date.now();
+    if (now - lastSpawnTime < CONFIG.SPAWN_COOLDOWN) return;
+    lastSpawnTime = now;
+    lastAction = now;
+
+    // 隱藏提示
+    const hint = document.getElementById('hint-text');
+    if (hint) hint.style.opacity = '0';
+
+    animals.push(new Animal());
+    totalSpawned++;
+    updateHUDCounts();
+});
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const now = Date.now();
+    if (now - lastSpawnTime < CONFIG.SPAWN_COOLDOWN) return;
+    lastSpawnTime = now;
+    lastAction = now;
+
+    const hint = document.getElementById('hint-text');
+    if (hint) hint.style.opacity = '0';
+
+    animals.push(new Animal());
+    totalSpawned++;
+    updateHUDCounts();
+}, { passive: false });
+
+// 圖鑑開關
+document.getElementById('collection-btn').onclick = () => {
+    document.getElementById('pokedex').style.display = 'flex';
+    document.getElementById('overlay').style.display = 'block';
+    setTimeout(() => document.getElementById('pokedex').classList.add('open'), 10);
+};
+
+const closePokedex = () => {
+    document.getElementById('pokedex').classList.remove('open');
+    setTimeout(() => {
+        document.getElementById('pokedex').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+    }, 250);
+};
+document.getElementById('close-pokedex').onclick = closePokedex;
+document.getElementById('overlay').onclick = closePokedex;
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+resize();
+updateUI();
+loop();
+</script>
+</body>
+</html>
