@@ -2,56 +2,56 @@
   {
     "path": "apps/animal-garden.claude.html",
     "title": "秘密花園 🌿",
-    "description": ""
+    "description": "點擊可以隨機生成動物，可以蒐集動物"
   },
   {
     "path": "apps/bubble.html",
     "title": "🫧 氣泡紙",
-    "description": ""
+    "description": "就是氣泡紙，可以開啟音樂"
   },
   {
     "path": "apps/japanese-vocab.20260319.2250.claude.html",
     "title": "日文單詞記憶卡",
-    "description": ""
+    "description": "目前只有N5的字彙"
   },
   {
     "path": "apps/jp01.claude.html",
     "title": "五十音練習",
-    "description": ""
+    "description": "五十音練習"
   },
   {
     "path": "apps/noisepad.claude.html",
     "title": "Noisepad",
-    "description": ""
+    "description": "預設12x12，可以往上下，往右增加行列，可以匯出匯入"
   },
   {
     "path": "apps/pi-noise-1.html",
     "title": "π noise",
-    "description": ""
+    "description": "會無限唸PI，目前支持中英日三語"
   },
   {
     "path": "apps/piano.claude.html",
     "title": "PIANO",
-    "description": ""
+    "description": "就是個鋼琴程式，可以匯出匯入檔案，可以輸出midi檔"
   },
   {
     "path": "apps/pinyin_flow.html",
     "title": "拼音流 Pinyin Flow",
-    "description": ""
+    "description": "練習漢語拼音，內建唐詩三百首，可以開啟挑戰模式挑戰每分鐘輸入字數"
   },
   {
     "path": "apps/scorekeeper.html",
     "title": "計分板",
-    "description": ""
+    "description": "玩大老二或是之類牌局的計分，可以設定玩家名稱，每一局只有一個贏家，剩下的都是輸家，會自動加總，可以針對每一局作刪除的動作"
   },
   {
     "path": "apps/slot-machine.html",
     "title": "🎰 Lucky 5 拉霸機",
-    "description": ""
+    "description": "可以自動拉霸的拉霸機，選項裡可以更換機台（改變每一種圖案的出現機率）"
   },
   {
     "path": "apps/wallpaper-generator-3.html",
     "title": "✦ WALLCRAFT — AI桌布產生器",
-    "description": ""
+    "description": "可以用基本圖案或是emoji產生隨機圖案的桌布，隨機到喜歡的桌布可以下載"
   }
 ]
