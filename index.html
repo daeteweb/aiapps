@@ -59,6 +59,7 @@
             transform: translateX(-100%);
             transition: transform var(--transition);
             box-shadow: 4px 0 32px rgba(0,0,0,0.3);
+            overflow: visible;
         }
         #sidebar.open { transform: translateX(0); }
 
@@ -69,9 +70,7 @@
             align-items: center;
             gap: 10px;
         }
-        .sidebar-header-icon {
-            font-size: 1.4rem;
-        }
+        .sidebar-header-icon { font-size: 1.4rem; }
         .sidebar-header-title {
             font-size: 1.05rem;
             font-weight: 700;
@@ -112,21 +111,12 @@
             font-size: 0.93rem;
             cursor: pointer;
         }
-        .nav-item:hover {
-            background: var(--sidebar-hover);
-            color: #fff;
-            border-left: 3px solid var(--accent);
-        }
-        .nav-item.active {
-            background: var(--sidebar-hover);
-            color: #fff;
-            border-left: 3px solid var(--accent);
-        }
+        .nav-item:hover { background: var(--sidebar-hover); color: #fff; border-left: 3px solid var(--accent); }
+        .nav-item.active { background: var(--sidebar-hover); color: #fff; border-left: 3px solid var(--accent); }
         .nav-item-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         /* ── ？badge ── */
         .help-badge {
-            position: relative;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -143,27 +133,27 @@
         }
         .help-badge:hover { background: var(--accent); }
 
-        /* tooltip */
-        .tooltip-bubble {
+        /* ── 全域 Tooltip（fixed，JS 計算位置）── */
+        #tooltip-global {
             display: none;
-            position: absolute;
-            left: calc(100% + 10px);
-            top: 50%;
-            transform: translateY(-50%);
+            position: fixed;
+            z-index: 9999;
             background: var(--tooltip-bg);
             color: var(--tooltip-text);
             border: 1px solid var(--sidebar-border);
             border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 0.82rem;
-            white-space: nowrap;
-            max-width: 200px;
+            padding: 9px 13px;
+            font-size: 0.85rem;
+            line-height: 1.75;
+            width: 220px;
+            word-break: break-word;
             white-space: normal;
-            z-index: 500;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            line-height: 1.5;
+            box-shadow: 0 6px 28px rgba(0,0,0,0.5);
         }
-        .tooltip-bubble::before {
+        #tooltip-global.show { display: block; }
+
+        /* 箭頭動態由 JS 控制 class */
+        #tooltip-global.arrow-left::before {
             content: '';
             position: absolute;
             right: 100%;
@@ -172,18 +162,26 @@
             border: 6px solid transparent;
             border-right-color: var(--sidebar-border);
         }
-        .tooltip-bubble.show { display: block; }
+        #tooltip-global.arrow-right::before {
+            content: '';
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 6px solid transparent;
+            border-left-color: var(--sidebar-border);
+        }
 
-        .tooltip-close {
-            display: none;
+        .tooltip-close-btn {
             float: right;
             margin-left: 8px;
             font-size: 0.75rem;
             color: var(--tab-text);
             cursor: pointer;
             font-weight: bold;
+            line-height: 1.6;
         }
-        .tooltip-close:hover { color: #fff; }
+        .tooltip-close-btn:hover { color: #fff; }
 
         /* ── 漢堡 Tab ── */
         #menu-tab {
@@ -266,18 +264,6 @@
         @media (max-width: 768px) {
             #main { display: none; }
             #readme-view { padding: 24px 5vw; }
-            .tooltip-bubble {
-                left: auto;
-                right: calc(100% + 10px);
-                top: 50%;
-            }
-            .tooltip-bubble::before {
-                right: auto;
-                left: 100%;
-                border-right-color: transparent;
-                border-left-color: var(--sidebar-border);
-            }
-            .tooltip-close { display: inline; }
         }
     </style>
 </head>
@@ -285,6 +271,9 @@
 
 <!-- 遮罩 -->
 <div id="overlay"></div>
+
+<!-- 全域 Tooltip -->
+<div id="tooltip-global"></div>
 
 <!-- Sidebar -->
 <div id="sidebar">
@@ -326,11 +315,68 @@
         sidebar.classList.remove('open');
         overlay.classList.remove('show');
         menuTab.classList.remove('hidden');
+        hideTooltip();
     }
 
     menuTab.addEventListener('click', openSidebar);
     closeBtn.addEventListener('click', closeSidebar);
     overlay.addEventListener('click', closeSidebar);
+
+    // ── 全域 Tooltip ──
+    const tooltipEl = document.getElementById('tooltip-global');
+    let currentBadge = null;
+    const TOOLTIP_W = 220;
+    const MARGIN = 10;
+
+    function showTooltip(badge, text, mobile) {
+        currentBadge = badge;
+        tooltipEl.innerHTML = '';
+        tooltipEl.classList.remove('arrow-left', 'arrow-right');
+
+        if (mobile) {
+            const closeX = document.createElement('span');
+            closeX.className = 'tooltip-close-btn';
+            closeX.textContent = '✕';
+            closeX.addEventListener('click', (e) => { e.stopPropagation(); hideTooltip(); });
+            tooltipEl.appendChild(closeX);
+        }
+        tooltipEl.appendChild(document.createTextNode(text));
+        tooltipEl.classList.add('show');
+
+        // 計算位置
+        const rect = badge.getBoundingClientRect();
+        const th = tooltipEl.offsetHeight || 70;
+
+        let left, arrowClass;
+
+        // 右側放得下就放右側，否則放左側
+        if (rect.right + MARGIN + TOOLTIP_W <= window.innerWidth - 8) {
+            left = rect.right + MARGIN;
+            arrowClass = 'arrow-left';
+        } else {
+            left = rect.left - TOOLTIP_W - MARGIN;
+            arrowClass = 'arrow-right';
+        }
+
+        let top = rect.top + rect.height / 2 - th / 2;
+        top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
+
+        tooltipEl.style.left = left + 'px';
+        tooltipEl.style.top  = top  + 'px';
+        tooltipEl.classList.add(arrowClass);
+    }
+
+    function hideTooltip() {
+        tooltipEl.classList.remove('show', 'arrow-left', 'arrow-right');
+        currentBadge = null;
+    }
+
+    // 點擊其他地方關閉 tooltip
+    document.addEventListener('click', (e) => {
+        if (currentBadge && !currentBadge.contains(e.target) && !tooltipEl.contains(e.target)) {
+            hideTooltip();
+        }
+    });
 
     // ── README 渲染 ──
     const readmeView = document.getElementById('readme-view');
@@ -363,15 +409,6 @@
 
             menu.innerHTML = '';
 
-            // 關閉所有 tooltip
-            document.addEventListener('click', (e) => {
-                document.querySelectorAll('.tooltip-bubble.show').forEach(t => {
-                    if (!t.contains(e.target) && !t.previousElementSibling?.contains(e.target)) {
-                        t.classList.remove('show');
-                    }
-                });
-            });
-
             data.forEach(item => {
                 const navItem = document.createElement('div');
                 navItem.className = 'nav-item';
@@ -385,38 +422,22 @@
                 badge.className = 'help-badge';
                 badge.textContent = '?';
 
-                const tooltip = document.createElement('div');
-                tooltip.className = 'tooltip-bubble';
-
-                const desc = item.description && item.description.trim() !== ''
+                const desc = (item.description && item.description.trim() !== '')
                     ? item.description
                     : '尚無說明';
 
                 if (mobile) {
-                    const closeX = document.createElement('span');
-                    closeX.className = 'tooltip-close';
-                    closeX.textContent = '✕';
-                    closeX.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        tooltip.classList.remove('show');
-                    });
-                    tooltip.appendChild(closeX);
-                }
-
-                tooltip.appendChild(document.createTextNode(desc));
-                badge.appendChild(tooltip);
-
-                // badge 點擊 / hover
-                if (mobile) {
                     badge.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const isOpen = tooltip.classList.contains('show');
-                        document.querySelectorAll('.tooltip-bubble.show').forEach(t => t.classList.remove('show'));
-                        if (!isOpen) tooltip.classList.add('show');
+                        if (currentBadge === badge && tooltipEl.classList.contains('show')) {
+                            hideTooltip();
+                        } else {
+                            showTooltip(badge, desc, true);
+                        }
                     });
                 } else {
-                    badge.addEventListener('mouseenter', () => tooltip.classList.add('show'));
-                    badge.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+                    badge.addEventListener('mouseenter', () => showTooltip(badge, desc, false));
+                    badge.addEventListener('mouseleave', () => hideTooltip());
                 }
 
                 navItem.appendChild(titleSpan);
@@ -440,7 +461,6 @@
                 menu.appendChild(navItem);
             });
 
-            // 預設開啟 README
             if (!mobile) showReadme();
 
         } catch (err) {
