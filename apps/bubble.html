@@ -37,7 +37,7 @@
 【音樂模式】
   三首內建歌曲（小星星、生日快樂、字母歌），
   各自對應一組頻率陣列（Hz），每捏破一顆泡泡播一個音符。
-  底部進度條顯示演奏進度，全部彈完後跳出慶祝畫面。
+  底部進度條顯示演奏進度，彈完後自動從頭循環，不中斷體驗。
 
 【粒子特效】
   使用獨立的 <canvas> 層（z-index 最高、pointer-events: none）：
@@ -524,7 +524,7 @@ function playPop() {
     melodyIndex++;
     updateProgress();
     if (melodyIndex >= song.notes.length) {
-      setTimeout(showCelebrate, 400);
+      melodyIndex = 0; // 播完自動循環
     }
   } else {
     playTone(600 + Math.random() * 600, 0.06, 'sine');
