@@ -1,3 +1,62 @@
+<!--
+╔══════════════════════════════════════════════════════════════════╗
+║                    🫧 互動氣泡紙  設計筆記                         ║
+╚══════════════════════════════════════════════════════════════════╝
+
+【設計概念】
+  模擬真實捏氣泡紙的感官體驗：視覺上像透明氣泡、觸覺上有震動、
+  聽覺上有音效，並加入音樂模式讓捏泡泡變成「用身體彈琴」的體驗。
+
+【視覺設計】
+  - 背景：水藍色系漸層，搭配兩個 radial-gradient 光暈，營造水感氛圍
+  - 氣泡（未破）：用多層 radial-gradient 模擬透明球體，
+      中心偏上方加白色高光（::before），模擬光線折射
+      box-shadow 帶淺藍陰影，加強立體懸浮感
+  - 氣泡（已破）：移除高光、降低透明度、scale 縮小至 0.88，
+      box-shadow 改為 inset 往內凹，視覺上像「洩氣」
+  - Header：frosted glass 效果（rgba + backdrop-filter: blur）
+  - 字體：Nunito（Google Fonts），圓潤感契合氣泡主題
+
+【互動偵測：路徑插值法（Line Interpolation）】
+  舊做法：每次 mousemove / touchmove 觸發時，
+          只用 document.elementFromPoint(x, y) 查詢當下那一點。
+  問題：  滑動快時，事件觸發頻率跟不上手速，兩點之間的氣泡會被跳過。
+
+  新做法：記錄上一幀的座標（lastX, lastY），
+          計算與當前點的距離，沿直線路徑每隔 INTERP_STEP px 插值一個點，
+          每個插值點都做一次 elementFromPoint 查詢。
+  效果：  不管滑多快，軌跡經過的泡泡全部都會被偵測到，不漏掉。
+  參數：  INTERP_STEP = bubbleSize / 3，確保小泡泡也不會被跳過。
+
+【音效系統：Web Audio API】
+  不依賴外部音源檔案，全部由瀏覽器即時合成：
+  - 一般模式：隨機頻率的 sine wave，模擬清脆氣泡破裂聲
+  - 音樂模式：用 triangle wave（音色更圓潤）依序播放音符頻率陣列
+  - 用 GainNode + exponentialRampToValueAtTime 做快速 decay，避免音符拖尾
+
+【音樂模式】
+  三首內建歌曲（小星星、生日快樂、字母歌），
+  各自對應一組頻率陣列（Hz），每捏破一顆泡泡播一個音符。
+  底部進度條顯示演奏進度，全部彈完後跳出慶祝畫面。
+
+【粒子特效】
+  使用獨立的 <canvas> 層（z-index 最高、pointer-events: none）：
+  - 每次捏破時，在該座標生成 10~16 顆粒子
+  - 粒子以均勻角度向四周發散，加上向上初速和重力模擬拋物線
+  - 每幀 life 值遞減，同步縮小尺寸與 alpha，自然消失
+  - 用 requestAnimationFrame 驅動，不佔用主執行緒
+
+【填滿螢幕】
+  根據 window.innerWidth / innerHeight 與 (bubbleSize + gap)
+  動態計算 cols 和 rows，直接用 CSS Grid 的固定欄列數排列，
+  確保氣泡完整填滿畫面且不產生捲動。
+
+【資料持久化】
+  累計捏破數量存入 localStorage（key: bubble_total_pops），
+  reset 氣泡紙或重新整理頁面後，數字繼續從上次疊加。
+  齒輪選單內可手動歸零。
+
+-->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -528,24 +587,56 @@ function pop(el, cx, cy) {
   if (navigator.vibrate) navigator.vibrate(12);
 }
 
-// ── 指標事件 ──
+// ── 指標事件（路徑插值法）──
+// 記錄上一幀座標，在兩幀之間沿直線補點，確保快速滑動時不漏掉氣泡
+let lastX = null, lastY = null;
+const INTERP_STEP = () => Math.max(4, bubbleSize / 3); // 每段插值距離，隨泡泡大小調整
+
 function getPos(e) {
   if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
   return { x: e.clientX, y: e.clientY };
 }
 
+function sweepLine(x, y) {
+  // 若是第一個點，直接偵測並記錄
+  if (lastX === null) {
+    lastX = x; lastY = y;
+    pop(document.elementFromPoint(x, y), x, y);
+    return;
+  }
+
+  // 計算兩點距離，沿路每隔 INTERP_STEP px 插值一次
+  const dx = x - lastX, dy = y - lastY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const step = INTERP_STEP();
+
+  for (let d = 0; d <= dist; d += step) {
+    const t = dist === 0 ? 1 : d / dist;
+    const ix = lastX + dx * t;
+    const iy = lastY + dy * t;
+    pop(document.elementFromPoint(ix, iy), ix, iy);
+  }
+
+  lastX = x; lastY = y;
+}
+
 function handleInteract(e) {
   if (!isPointerDown) return;
   const { x, y } = getPos(e);
-  const el = document.elementFromPoint(x, y);
-  pop(el, x, y);
+  sweepLine(x, y);
 }
 
-app.addEventListener('mousedown', (e) => { isPointerDown = true; const {x,y}=getPos(e); pop(document.elementFromPoint(x,y),x,y); });
-window.addEventListener('mouseup', () => isPointerDown = false);
+function resetLastPos() {
+  isPointerDown = false;
+  lastX = null;
+  lastY = null;
+}
+
+app.addEventListener('mousedown', (e) => { isPointerDown = true; lastX = null; const {x,y}=getPos(e); sweepLine(x,y); });
+window.addEventListener('mouseup', resetLastPos);
 app.addEventListener('mousemove', handleInteract);
-app.addEventListener('touchstart', (e) => { e.preventDefault(); isPointerDown = true; handleInteract(e); }, { passive: false });
-window.addEventListener('touchend', () => isPointerDown = false);
+app.addEventListener('touchstart', (e) => { e.preventDefault(); isPointerDown = true; lastX = null; handleInteract(e); }, { passive: false });
+window.addEventListener('touchend', resetLastPos);
 app.addEventListener('touchmove', (e) => { e.preventDefault(); handleInteract(e); }, { passive: false });
 
 // ── 控制項 ──
