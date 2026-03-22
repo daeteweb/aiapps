@@ -1,23 +1,57 @@
 [
-{"path": "apps/animal-garden.claude.html", "title": "秘密花園 🌿"}
-,
-{"path": "apps/bubble.html", "title": "🫧 氣泡紙"}
-,
-{"path": "apps/japanese-vocab.20260319.2250.claude.html", "title": "日文單詞記憶卡"}
-,
-{"path": "apps/jp01.claude.html", "title": "五十音練習"}
-,
-{"path": "apps/noisepad.claude.html", "title": "Noisepad"}
-,
-{"path": "apps/pi-noise-1.html", "title": "π noise"}
-,
-{"path": "apps/piano.claude.html", "title": "PIANO"}
-,
-{"path": "apps/pinyin_flow.html", "title": "拼音流 Pinyin Flow"}
-,
-{"path": "apps/scorekeeper.html", "title": "計分板"}
-,
-{"path": "apps/slot-machine.html", "title": "🎰 Lucky 5 拉霸機"}
-,
-{"path": "apps/wallpaper-generator-3.html", "title": "✦ WALLCRAFT — AI桌布產生器"}
+  {
+    "path": "apps/animal-garden.claude.html",
+    "title": "秘密花園 🌿",
+    "description": ""
+  },
+  {
+    "path": "apps/bubble.html",
+    "title": "🫧 氣泡紙",
+    "description": ""
+  },
+  {
+    "path": "apps/japanese-vocab.20260319.2250.claude.html",
+    "title": "日文單詞記憶卡",
+    "description": ""
+  },
+  {
+    "path": "apps/jp01.claude.html",
+    "title": "五十音練習",
+    "description": ""
+  },
+  {
+    "path": "apps/noisepad.claude.html",
+    "title": "Noisepad",
+    "description": ""
+  },
+  {
+    "path": "apps/pi-noise-1.html",
+    "title": "π noise",
+    "description": ""
+  },
+  {
+    "path": "apps/piano.claude.html",
+    "title": "PIANO",
+    "description": ""
+  },
+  {
+    "path": "apps/pinyin_flow.html",
+    "title": "拼音流 Pinyin Flow",
+    "description": ""
+  },
+  {
+    "path": "apps/scorekeeper.html",
+    "title": "計分板",
+    "description": ""
+  },
+  {
+    "path": "apps/slot-machine.html",
+    "title": "🎰 Lucky 5 拉霸機",
+    "description": ""
+  },
+  {
+    "path": "apps/wallpaper-generator-3.html",
+    "title": "✦ WALLCRAFT — AI桌布產生器",
+    "description": ""
+  }
 ]
