@@ -40,6 +40,11 @@
     "description": "練習漢語拼音，內建唐詩三百首，可以開啟挑戰模式挑戰每分鐘輸入字數"
   },
   {
+    "path": "apps/react_budget.claude.html",
+    "title": "REACT BUDGET — 反應力極限訓練",
+    "description": ""
+  },
+  {
     "path": "apps/scorekeeper.html",
     "title": "計分板",
     "description": "玩大老二或是之類牌局的計分，可以設定玩家名稱，每一局只有一個贏家，剩下的都是輸家，會自動加總，可以針對每一局作刪除的動作"
