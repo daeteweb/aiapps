@@ -25,6 +25,11 @@
     "description": "預設12x12，可以往上下，往右增加行列，可以匯出匯入"
   },
   {
+    "path": "apps/paint.kid.claude.html",
+    "title": "小畫家：動物森林",
+    "description": ""
+  },
+  {
     "path": "apps/pi-noise-1.html",
     "title": "π noise",
     "description": "會無限唸PI，目前支持中英日三語"
