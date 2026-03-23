@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>REACT BUDGET — 反應力極限訓練</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap');
+
+        :root {
+            --bg: #000000;
+            --gold: #FFD700;
+            --gold-dim: #554400;
+            --green: #00FF41;
+            --red: #FF2222;
+            --border: #1a1a1a;
+            --border-bright: #333;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            margin: 0; padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--gold);
+            font-family: 'Share Tech Mono', 'Courier New', monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+            height: 100vh;
+        }
+
+        /* ── HEADER ── */
+        #header {
+            padding: 10px 16px 8px;
+            border-bottom: 1px solid var(--border-bright);
+            flex-shrink: 0;
+        }
+
+        #stats {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.85rem;
+            letter-spacing: 0.1em;
+            margin-bottom: 8px;
+        }
+
+        #stats .label { color: #555; font-size: 0.65rem; display: block; }
+        #stats .val   { color: var(--gold); font-size: 1.1rem; }
+
+        #timer-container {
+            width: 100%;
+            height: 6px;
+            background: #111;
+            border-radius: 3px;
+            overflow: visible;
+            position: relative;
+        }
+
+        #timer-bar {
+            height: 100%;
+            background: var(--gold);
+            border-radius: 3px;
+            width: 100%;
+            /* No transition — static, only jumps on events (FTG HP style) */
+            box-shadow: 0 0 8px var(--gold);
+        }
+
+        /* ── GAME GRID ── */
+        #game-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 6px;
+            padding: 6px;
+            min-height: 0;
+        }
+
+        .cell {
+            border: 1px solid var(--border-bright);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: crosshair;
+            background: #050505;
+            /* Corner accents */
+            background-image:
+                linear-gradient(var(--border-bright), var(--border-bright)),
+                linear-gradient(var(--border-bright), var(--border-bright)),
+                linear-gradient(var(--border-bright), var(--border-bright)),
+                linear-gradient(var(--border-bright), var(--border-bright));
+            background-size: 12px 1px, 12px 1px, 1px 12px, 1px 12px;
+            background-position: top left, bottom right, top left, bottom right;
+            background-repeat: no-repeat;
+            overflow: hidden;
+        }
+
+        /* Flash effects — no transition on box-shadow so it's instant (FTG style) */
+        .cell.flash-green {
+            box-shadow: inset 0 0 60px rgba(0,255,65,0.35), 0 0 20px rgba(0,255,65,0.2);
+            border-color: var(--green);
+        }
+        .cell.flash-red {
+            box-shadow: inset 0 0 60px rgba(255,34,34,0.35), 0 0 20px rgba(255,34,34,0.2);
+            border-color: var(--red);
+        }
+        .cell.flash-fade {
+            transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+        }
+
+        /* ── TARGETS ── */
+        .target {
+            pointer-events: none;
+            position: absolute;
+        }
+
+        /* Circle — SVG drawn via CSS */
+        .circle {
+            width: min(80px, 35%);
+            aspect-ratio: 1;
+            border-radius: 50%;
+            border: 8px solid var(--green);
+            box-shadow: 0 0 16px var(--green), inset 0 0 16px rgba(0,255,65,0.1);
+            animation: pulse-in 0.08s ease-out;
+        }
+
+        /* Cross — CSS pseudo-elements */
+        .cross {
+            width: min(80px, 35%);
+            aspect-ratio: 1;
+            position: relative;
+        }
+        .cross::before, .cross::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100%; height: 8px;
+            background: var(--red);
+            box-shadow: 0 0 10px var(--red);
+            transform-origin: center;
+        }
+        .cross::before { transform: translate(-50%, -50%) rotate(45deg); }
+        .cross::after  { transform: translate(-50%, -50%) rotate(-45deg); }
+
+        @keyframes pulse-in {
+            from { transform: scale(0.6); opacity: 0; }
+            to   { transform: scale(1);   opacity: 1; }
+        }
+
+        /* Floating penalty text */
+        .penalty-text {
+            position: absolute;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.2rem;
+            font-weight: 900;
+            pointer-events: none;
+            z-index: 10;
+            animation: float-up 0.6s ease-out forwards;
+        }
+        .penalty-text.neg { color: var(--red); }
+        .penalty-text.pos { color: var(--green); }
+
+        @keyframes float-up {
+            0%   { opacity: 1; transform: translateY(0);     }
+            100% { opacity: 0; transform: translateY(-50px); }
+        }
+
+        /* ── OVERLAY (Start / End) ── */
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.92);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            gap: 0;
+        }
+
+        #overlay h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: clamp(1.6rem, 6vw, 2.8rem);
+            font-weight: 900;
+            letter-spacing: 0.15em;
+            color: var(--gold);
+            text-shadow: 0 0 20px var(--gold);
+            margin-bottom: 6px;
+        }
+
+        #overlay .subtitle {
+            font-size: 0.7rem;
+            color: #555;
+            letter-spacing: 0.25em;
+            margin-bottom: 28px;
+        }
+
+        /* Result panel */
+        #result-display {
+            display: none;
+            width: min(360px, 90vw);
+            border: 1px solid var(--gold-dim);
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            background: #0a0800;
+        }
+
+        #result-display .result-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.3em;
+            color: #555;
+            text-align: center;
+            margin-bottom: 14px;
+        }
+
+        .result-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 16px;
+        }
+
+        .result-item {
+            text-align: center;
+        }
+        .result-item .r-label {
+            font-size: 0.58rem;
+            color: #555;
+            letter-spacing: 0.15em;
+            display: block;
+            margin-bottom: 2px;
+        }
+        .result-item .r-val {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.3rem;
+            color: var(--gold);
+        }
+        .result-item .r-val.green { color: var(--green); }
+        .result-item .r-val.red   { color: var(--red); }
+
+        .result-divider {
+            grid-column: 1 / -1;
+            height: 1px;
+            background: var(--border-bright);
+            margin: 4px 0;
+        }
+
+        /* Mode buttons */
+        .mode-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .btn-mode {
+            background: transparent;
+            color: #555;
+            border: 1px solid #222;
+            padding: 8px 18px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-mode:hover { border-color: var(--gold-dim); color: var(--gold-dim); }
+        .btn-mode.active {
+            border-color: var(--gold);
+            color: var(--gold);
+            background: #0d0a00;
+            box-shadow: 0 0 8px rgba(255,215,0,0.2);
+        }
+
+        /* Start button */
+        #btn-start {
+            background: var(--gold);
+            color: #000;
+            border: none;
+            padding: 14px 48px;
+            font-family: 'Orbitron', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            cursor: pointer;
+            transition: all 0.15s;
+            box-shadow: 0 0 20px rgba(255,215,0,0.4);
+        }
+        #btn-start:hover {
+            background: #fff5a0;
+            box-shadow: 0 0 30px rgba(255,215,0,0.6);
+        }
+        #btn-start:active { transform: scale(0.97); }
+
+        /* Rules hint */
+        .rules-hint {
+            margin-top: 20px;
+            font-size: 0.6rem;
+            color: #333;
+            letter-spacing: 0.08em;
+            text-align: center;
+            line-height: 1.8;
+        }
+        .rules-hint span.g { color: #1a5c1a; }
+        .rules-hint span.r { color: #5c1a1a; }
+    </style>
+</head>
+<body>
+
+<div id="header">
+    <div id="stats">
+        <div>
+            <span class="label">SCORE</span>
+            <span class="val" id="score-val">0</span>
+        </div>
+        <div style="text-align:center">
+            <span class="label">TIME BUDGET</span>
+            <span class="val" id="time-val">10.00s</span>
+        </div>
+        <div style="text-align:right">
+            <span class="label">MODE</span>
+            <span class="val" id="mode-display">MOUSE</span>
+        </div>
+    </div>
+    <div id="timer-container">
+        <div id="timer-bar"></div>
+    </div>
+</div>
+
+<div id="game-grid">
+    <div class="cell" id="cell-0"></div>
+    <div class="cell" id="cell-1"></div>
+    <div class="cell" id="cell-2"></div>
+    <div class="cell" id="cell-3"></div>
+</div>
+
+<!-- Overlay: Start & End -->
+<div id="overlay">
+    <h1>REACT BUDGET</h1>
+    <p class="subtitle">REACTION TRAINING SYSTEM</p>
+
+    <div id="result-display">
+        <div class="result-title">── GAME OVER ──</div>
+        <div class="result-grid">
+            <div class="result-item">
+                <span class="r-label">SCORE</span>
+                <span class="r-val green" id="r-score">0</span>
+            </div>
+            <div class="result-item">
+                <span class="r-label">AVG REACTION</span>
+                <span class="r-val" id="r-avg">0ms</span>
+            </div>
+            <div class="result-divider"></div>
+            <div class="result-item">
+                <span class="r-label">HIT ✓</span>
+                <span class="r-val green" id="r-hit">0</span>
+            </div>
+            <div class="result-item">
+                <span class="r-label">MISS (圈圈沒按)</span>
+                <span class="r-val red" id="r-miss">0</span>
+            </div>
+            <div class="result-item">
+                <span class="r-label">FALSE (叉叉按錯)</span>
+                <span class="r-val red" id="r-false">0</span>
+            </div>
+            <div class="result-item">
+                <span class="r-label">EMPTY (空格誤觸)</span>
+                <span class="r-val red" id="r-empty">0</span>
+            </div>
+            <div class="result-divider"></div>
+            <div class="result-item" style="grid-column:1/-1">
+                <span class="r-label">ACCURACY</span>
+                <span class="r-val" id="r-acc">--%</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="mode-row">
+        <button class="btn-mode" id="btn-mouse" onclick="setMode('mouse')">🖱 MOUSE</button>
+        <button class="btn-mode" id="btn-touch" onclick="setMode('touch')">👆 TOUCH</button>
+    </div>
+    <button id="btn-start" onclick="startGame()">START</button>
+
+    <div class="rules-hint">
+        <span class="g">●圈圈 按到</span> → 扣實際反應時間 &nbsp;|&nbsp; <span class="r">●圈圈 漏按</span> → -1.0s<br>
+        <span class="r">✕叉叉 按到</span> → -1.0s &nbsp;|&nbsp; 叉叉沒按 → 沒事<br>
+        空格誤觸 → -0.5s &nbsp;|&nbsp; 所有圖案存在時間：1秒
+    </div>
+</div>
+
+<script>
+// ── Audio Engine ──────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function ensureAudio() {
+    if (!audioCtx) audioCtx = new AudioCtx();
+}
+
+function playTone(freq, type, duration, gainVal = 0.12) {
+    ensureAudio();
+    try {
+        const osc  = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    } catch(e) {}
+}
+
+const sndHit   = () => playTone(880, 'sine',     0.12);
+const sndError = () => playTone(140, 'sawtooth', 0.22);
+const sndEmpty = () => playTone(380, 'sine',     0.06, 0.06);
+
+// ── Game State ────────────────────────────────────────────────
+let score       = 0;
+let timeBudget  = 10000;   // ms — the "HP bar"
+let gameActive  = false;
+let gameMode    = 'mouse'; // 'mouse' | 'touch'
+
+// Stats counters
+let statHit    = 0;
+let statMiss   = 0;  // green missed
+let statFalse  = 0;  // red clicked by mistake
+let statEmpty  = 0;  // empty cell clicked
+let statReactionTotal = 0;
+
+// DOM refs
+const cells       = Array.from(document.querySelectorAll('.cell'));
+const scoreEl     = document.getElementById('score-val');
+const timeEl      = document.getElementById('time-val');
+const timerBar    = document.getElementById('timer-bar');
+const overlay     = document.getElementById('overlay');
+const modeDisplay = document.getElementById('mode-display');
+
+// ── Mode ──────────────────────────────────────────────────────
+function setMode(mode) {
+    gameMode = mode;
+    document.getElementById('btn-mouse').classList.toggle('active', mode === 'mouse');
+    document.getElementById('btn-touch').classList.toggle('active', mode === 'touch');
+    modeDisplay.textContent = mode === 'mouse' ? 'MOUSE' : 'TOUCH';
+}
+setMode('mouse');
+
+// ── Start / End ───────────────────────────────────────────────
+function startGame() {
+    ensureAudio();
+    score = timeBudget = 10000;
+    timeBudget = 10000;
+    score = 0;
+    statHit = statMiss = statFalse = statEmpty = statReactionTotal = 0;
+    gameActive = true;
+
+    overlay.style.display = 'none';
+    scoreEl.textContent = '0';
+    timeEl.textContent  = '10.00s';
+    timerBar.style.width = '100%';
+
+    cells.forEach(cell => {
+        resetCell(cell);
+        scheduleSpawn(cell);
+    });
+}
+
+function endGame() {
+    if (!gameActive) return;
+    gameActive = false;
+
+    // Clear all cells silently (no penalty for leftover targets)
+    cells.forEach(cell => resetCell(cell, true));
+
+    // Build result
+    const totalAttempts = statHit + statMiss + statFalse;
+    const acc = totalAttempts > 0
+        ? Math.round(statHit / totalAttempts * 100)
+        : 0;
+    const avgReact = statHit > 0
+        ? Math.round(statReactionTotal / statHit)
+        : 0;
+
+    document.getElementById('r-score').textContent = score;
+    document.getElementById('r-avg').textContent   = statHit > 0 ? avgReact + 'ms' : '--';
+    document.getElementById('r-hit').textContent   = statHit;
+    document.getElementById('r-miss').textContent  = statMiss;
+    document.getElementById('r-false').textContent = statFalse;
+    document.getElementById('r-empty').textContent = statEmpty;
+    document.getElementById('r-acc').textContent   = acc + '%';
+
+    document.getElementById('result-display').style.display = 'block';
+    overlay.style.display = 'flex';
+}
+
+// ── Budget update (called every time timeBudget changes) ──────
+function applyBudgetChange(delta) {
+    // delta is negative (penalty) or negative (reaction time cost)
+    timeBudget += delta; // delta should already be negative
+    if (timeBudget < 0) timeBudget = 0;
+
+    const pct = timeBudget / 10000 * 100;
+    timerBar.style.width = pct + '%';
+    timeEl.textContent   = (timeBudget / 1000).toFixed(2) + 's';
+
+    if (timeBudget <= 0) {
+        endGame();
+    }
+}
+
+// ── Cell Lifecycle ────────────────────────────────────────────
+function scheduleSpawn(cell) {
+    if (!gameActive) return;
+    const delay = Math.random() * 900 + 300; // 300–1200ms
+    cell._spawnTimer = setTimeout(() => spawnTarget(cell), delay);
+}
+
+function spawnTarget(cell) {
+    if (!gameActive) return;
+
+    let type = pickType(cell);
+
+    if (type === 'none') {
+        // Stay empty this cycle, schedule next
+        scheduleSpawn(cell);
+        return;
+    }
+
+    // Place target element
+    const el = document.createElement('div');
+    el.className = 'target ' + (type === 'green' ? 'circle' : 'cross');
+    cell.appendChild(el);
+    cell._type      = type;
+    cell._spawnTime = performance.now();
+
+    // Auto-clear after 1 second
+    cell._autoTimer = setTimeout(() => {
+        if (!gameActive) return;
+        if (cell._type === 'green') {
+            // Missed a green circle → -1s penalty + red flash
+            statMiss++;
+            flashCell(cell, 'red');
+            sndError();
+            applyBudgetChange(-1000);
+            showFloatingText(cell, '-1.0s', 'neg');
+        }
+        // Red cross auto-disappear = no penalty, no flash (as designed)
+        resetCell(cell);
+        scheduleSpawn(cell);
+    }, 1000);
+}
+
+// Decide what type to spawn for this cell
+function pickType() {
+    if (gameMode === 'mouse') {
+        // At most 1 green on screen at a time
+        const greenCount = cells.filter(c => c._type === 'green').length;
+        const rand = Math.random();
+        if (greenCount === 0) {
+            // 50% green, 30% red, 20% none
+            if (rand < 0.50) return 'green';
+            if (rand < 0.80) return 'red';
+            return 'none';
+        } else {
+            // 50% red, 50% none  (green locked)
+            return rand < 0.50 ? 'red' : 'none';
+        }
+    } else {
+        // Touch mode: fully independent, true random including "all red" scenario
+        const rand = Math.random();
+        if (rand < 0.40) return 'green'; // 40%
+        if (rand < 0.75) return 'red';   // 35%
+        return 'none';                   // 25% — real empty cells exist
+    }
+}
+
+function resetCell(cell, silent = false) {
+    clearTimeout(cell._autoTimer);
+    clearTimeout(cell._spawnTimer);
+    cell._type      = null;
+    cell._spawnTime = null;
+    cell.innerHTML  = '';
+    if (!silent) {
+        // Remove any lingering flash
+        cell.classList.remove('flash-green', 'flash-red', 'flash-fade');
+    }
+}
+
+// ── Visual Feedback ───────────────────────────────────────────
+function flashCell(cell, color) {
+    cell.classList.remove('flash-green', 'flash-red', 'flash-fade');
+    void cell.offsetWidth; // force reflow for re-trigger
+
+    cell.classList.add(color === 'green' ? 'flash-green' : 'flash-red');
+
+    // After a brief instant, add fade class so it fades out smoothly
+    setTimeout(() => {
+        cell.classList.add('flash-fade');
+        setTimeout(() => {
+            cell.classList.remove('flash-green', 'flash-red', 'flash-fade');
+        }, 220);
+    }, 60);
+}
+
+function showFloatingText(cell, text, cls) {
+    const el = document.createElement('div');
+    el.className   = 'penalty-text ' + cls;
+    el.textContent = text;
+    el.style.left  = '50%';
+    el.style.top   = '50%';
+    el.style.transform = 'translateX(-50%) translateY(-50%)';
+    cell.appendChild(el);
+    setTimeout(() => el.remove(), 650);
+}
+
+// ── Input Handling ────────────────────────────────────────────
+cells.forEach(cell => {
+    cell.addEventListener('pointerdown', e => {
+        if (!gameActive) return;
+        e.preventDefault();
+
+        const type = cell._type;
+        const now  = performance.now();
+
+        if (type === 'green') {
+            // ✅ Correct hit
+            const reaction = now - cell._spawnTime;
+            statHit++;
+            statReactionTotal += reaction;
+            score++;
+            scoreEl.textContent = score;
+
+            clearTimeout(cell._autoTimer); // cancel auto-disappear
+            flashCell(cell, 'green');
+            sndHit();
+            applyBudgetChange(-reaction);
+            showFloatingText(cell, '-' + (reaction / 1000).toFixed(2) + 's', 'neg');
+
+            resetCell(cell, true);
+            scheduleSpawn(cell);
+
+        } else if (type === 'red') {
+            // ❌ Clicked red cross
+            statFalse++;
+            clearTimeout(cell._autoTimer);
+            flashCell(cell, 'red');
+            sndError();
+            applyBudgetChange(-1000);
+            showFloatingText(cell, '-1.0s', 'neg');
+
+            resetCell(cell, true);
+            scheduleSpawn(cell);
+
+        } else {
+            // ⚠️ Empty cell tap
+            statEmpty++;
+            flashCell(cell, 'red');
+            sndEmpty();
+            applyBudgetChange(-500);
+            showFloatingText(cell, '-0.5s', 'neg');
+            // No resetCell — cell is already empty, just stay and continue
+        }
+    });
+});
+</script>
+</body>
+</html>
