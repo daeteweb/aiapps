@@ -27,7 +27,7 @@
   {
     "path": "apps/paint.kid.claude.html",
     "title": "小畫家：動物森林",
-    "description": ""
+    "description": "可以嘗試把螢幕塗滿的樂趣，失敗作，待改進"
   },
   {
     "path": "apps/pi-noise-1.html",
@@ -47,7 +47,7 @@
   {
     "path": "apps/react_budget.claude.html",
     "title": "REACT BUDGET — 反應力極限訓練",
-    "description": ""
+    "description": "可測試反應力，看10秒內能按對幾次，按錯會扣時間"
   },
   {
     "path": "apps/scorekeeper.html",
