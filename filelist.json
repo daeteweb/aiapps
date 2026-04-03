@@ -22,7 +22,7 @@
   {
     "path": "apps/maze.claude.html",
     "title": "迷宮挑戰",
-    "description": ""
+    "description": "滑動控制，目標是滑動左上方塊到右下"
   },
   {
     "path": "apps/noisepad.claude.html",
@@ -42,7 +42,7 @@
   {
     "path": "apps/piano.claude.html",
     "title": "PIANO",
-    "description": "就是個鋼琴程式，可以匯出匯入檔案，可以輸出midi檔"
+    "description": "就是個鋼琴程式，最上的(+)(-)可以調整琴鍵大小，滑桿可以調整常用琴鍵區域，可以匯出匯入檔案，可以輸出midi檔"
   },
   {
     "path": "apps/pinyin_flow.html",
