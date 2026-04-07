@@ -819,6 +819,18 @@ function spin() {
   // Generate result
   const result = Array(9).fill(0).map(() => pickSymbol());
 
+  // 防止直列三格相同（模擬滾輪不會有同列三連的情形）
+  // 直列：col 0 → [0,3,6]，col 1 → [1,4,7]，col 2 → [2,5,8]
+  // 若三格相同，換掉中間那格（index 1 of column），避免影響橫線/斜線太多
+  for (let col = 0; col < 3; col++) {
+    const top = col, mid = col + 3, bot = col + 6;
+    if (result[top] === result[mid] && result[mid] === result[bot]) {
+      const original = result[mid];
+      const others = SYMBOLS.filter(s => s !== original);
+      result[mid] = others[Math.floor(Math.random() * others.length)];
+    }
+  }
+
   // Reveal columns with delay
   const colDelays = [600, 900, 1200];
   for (let col = 0; col < 3; col++) {
