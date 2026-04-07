@@ -27,7 +27,7 @@
   {
     "path": "apps/noisepad.claude.html",
     "title": "Noisepad",
-    "description": "預設12x12，可以往上下，往右增加行列，可以匯出匯入"
+    "description": "由TENORI-ON啟發，預設12x12，可以往上下，往右增加行列，左邊圖案點擊可以變更音色，可以調整tempo，可以選擇全琴鍵、白鍵、五鍵由可以匯出匯入"
   },
   {
     "path": "apps/paint.kid.claude.html",
