@@ -9,52 +9,62 @@
 
 【視覺設計】
   - 背景：水藍色系漸層，搭配兩個 radial-gradient 光暈，營造水感氛圍
-  - 氣泡（未破）：用多層 radial-gradient 模擬透明球體，
-      中心偏上方加白色高光（::before），模擬光線折射
-      box-shadow 帶淺藍陰影，加強立體懸浮感
-  - 氣泡（已破）：移除高光、降低透明度、scale 縮小至 0.88，
-      box-shadow 改為 inset 往內凹，視覺上像「洩氣」
+  - 氣泡（未破）：Canvas 繪製，用 radial gradient 模擬透明球體，
+      偏上方加白色橢圓高光，帶淺藍陰影強化立體懸浮感
+  - 氣泡（已破）：只剩淡薄的內凹圓圈輪廓，視覺上像「洩氣」的坑
   - Header：frosted glass 效果（rgba + backdrop-filter: blur）
   - 字體：Nunito（Google Fonts），圓潤感契合氣泡主題
 
-【互動偵測：路徑插值法（Line Interpolation）】
-  舊做法：每次 mousemove / touchmove 觸發時，
-          只用 document.elementFromPoint(x, y) 查詢當下那一點。
-  問題：  滑動快時，事件觸發頻率跟不上手速，兩點之間的氣泡會被跳過。
+【渲染架構：Canvas 全面接管】
+  所有氣泡改用單一 <canvas> 元素繪製，完全脫離 DOM：
+  - 不再有幾百個 <div>，只有一個 canvas element
+  - 狀態只是一個 Boolean[] 陣列（popped[]），標記哪顆破了
+  - 繪圖在 GPU 上跑，比 DOM style recalc 快很多
+  - 每次 pop 用 requestAnimationFrame 批次重繪，避免重複觸發
 
-  新做法：記錄上一幀的座標（lastX, lastY），
-          計算與當前點的距離，沿直線路徑每隔 INTERP_STEP px 插值一個點，
-          每個插值點都做一次 elementFromPoint 查詢。
-  效果：  不管滑多快，軌跡經過的泡泡全部都會被偵測到，不漏掉。
-  參數：  INTERP_STEP = bubbleSize / 3，確保小泡泡也不會被跳過。
+【互動偵測：座標數學 + 路徑插值法（Line Interpolation）】
+  舊做法：每次移動事件用 document.elementFromPoint 做 DOM 查詢。
+  問題：  滑動快時事件觸發間距大，兩點之間氣泡被跳過；DOM 查詢有開銷。
+
+  新做法（兩層優化）：
+  1. 座標數學：直接用 (x - offsetX) / (bubbleSize + gap) 計算格子 index，
+     O(1) 速度，不做任何 DOM 查詢。額外做圓形碰撞檢測，點到圓外不觸發。
+  2. 路徑插值：記錄上一幀座標（lastX, lastY），在兩點之間每隔
+     (bubbleSize / 3) px 補一個插值點，確保快速滑動時不漏掉任何氣泡。
+     指標抬起時重置 lastX/lastY，避免下次按下時跨距離誤補。
 
 【音效系統：Web Audio API】
   不依賴外部音源檔案，全部由瀏覽器即時合成：
   - 一般模式：隨機頻率的 sine wave，模擬清脆氣泡破裂聲
   - 音樂模式：用 triangle wave（音色更圓潤）依序播放音符頻率陣列
   - 用 GainNode + exponentialRampToValueAtTime 做快速 decay，避免音符拖尾
+  - 播完後自動從頭循環，不中斷體驗
 
-【音樂模式】
-  三首內建歌曲（小星星、生日快樂、字母歌），
-  各自對應一組頻率陣列（Hz），每捏破一顆泡泡播一個音符。
-  底部進度條顯示演奏進度，彈完後自動從頭循環，不中斷體驗。
+【歌曲列表】（字母歌與小星星旋律相同，已移除，改加以下五首）
+  - 🌟 小星星（Twinkle Twinkle Little Star）
+  - 🎂 生日快樂（Happy Birthday）
+  - 🐑 瑪莉有隻小綿羊（Mary Had a Little Lamb）
+  - 🌉 倫敦鐵橋（London Bridge Is Falling Down）
+  - 🚣 划船歌（Row Row Row Your Boat）
+  - 🐭 三隻瞎老鼠（Three Blind Mice）
 
 【粒子特效】
   使用獨立的 <canvas> 層（z-index 最高、pointer-events: none）：
   - 每次捏破時，在該座標生成 10~16 顆粒子
   - 粒子以均勻角度向四周發散，加上向上初速和重力模擬拋物線
   - 每幀 life 值遞減，同步縮小尺寸與 alpha，自然消失
-  - 用 requestAnimationFrame 驅動，不佔用主執行緒
 
 【填滿螢幕】
   根據 window.innerWidth / innerHeight 與 (bubbleSize + gap)
-  動態計算 cols 和 rows，直接用 CSS Grid 的固定欄列數排列，
-  確保氣泡完整填滿畫面且不產生捲動。
+  動態計算 cols 和 rows，格子整體水平＋垂直置中於 canvas。
+
+【重置按鈕（🔄）】
+  只重置畫面上的氣泡狀態（popped[] 清空），不影響累計捏破數字。
 
 【資料持久化】
   累計捏破數量存入 localStorage（key: bubble_total_pops），
   reset 氣泡紙或重新整理頁面後，數字繼續從上次疊加。
-  齒輪選單內可手動歸零。
+  齒輪選單內可手動歸零累計數。
 
 -->
 <!DOCTYPE html>
@@ -65,12 +75,6 @@
   <title>🫧 氣泡紙</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
-
-    :root {
-      --bubble-size: 38px;
-      --gap: 6px;
-      --bg: #c8e6f5;
-    }
 
     *, *::before, *::after {
       box-sizing: border-box;
@@ -83,16 +87,14 @@
       width: 100%; height: 100%;
       overflow: hidden;
       touch-action: none;
-      background: var(--bg);
+      background: #c8e6f5;
       font-family: 'Nunito', sans-serif;
     }
 
-    /* ─── 背景漸層 ─── */
     body::before {
       content: '';
-      position: fixed;
-      inset: 0;
-      background: 
+      position: fixed; inset: 0;
+      background:
         radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.55) 0%, transparent 60%),
         radial-gradient(ellipse at 80% 80%, rgba(160,210,240,0.4) 0%, transparent 60%),
         linear-gradient(135deg, #d4eef9 0%, #b0d8f0 100%);
@@ -102,11 +104,8 @@
     /* ─── Header ─── */
     .header {
       position: fixed;
-      top: 0; left: 0; right: 0;
-      height: 52px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      top: 0; left: 0; right: 0; height: 52px;
+      display: flex; align-items: center; justify-content: space-between;
       padding: 0 14px;
       z-index: 200;
       background: rgba(255,255,255,0.35);
@@ -115,37 +114,21 @@
       border-bottom: 1px solid rgba(255,255,255,0.5);
     }
 
-    .stats {
-      font-size: 14px;
-      font-weight: 700;
-      color: #2a7aab;
-      letter-spacing: 0.02em;
-    }
-    .stats span {
-      font-size: 18px;
-      font-weight: 900;
-      color: #1a5f8a;
-    }
+    .stats { font-size: 14px; font-weight: 700; color: #2a7aab; letter-spacing: 0.02em; }
+    .stats span { font-size: 18px; font-weight: 900; color: #1a5f8a; }
 
-    .controls {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+    .controls { display: flex; align-items: center; gap: 8px; }
 
     .ctrl-btn {
       width: 34px; height: 34px;
-      border: none;
-      border-radius: 50%;
+      border: none; border-radius: 50%;
       background: rgba(255,255,255,0.7);
       backdrop-filter: blur(8px);
       box-shadow: 0 2px 8px rgba(0,100,160,0.15), inset 0 1px 2px rgba(255,255,255,0.8);
-      cursor: pointer;
-      font-size: 16px;
+      cursor: pointer; font-size: 15px;
       display: flex; align-items: center; justify-content: center;
       transition: transform 0.1s, box-shadow 0.1s;
-      color: #2a7aab;
-      font-weight: 900;
+      color: #2a7aab; font-weight: 900;
     }
     .ctrl-btn:active {
       transform: scale(0.9);
@@ -153,379 +136,419 @@
     }
 
     .mode-label {
-      font-size: 11px;
-      font-weight: 700;
-      color: #2a7aab;
+      font-size: 11px; font-weight: 700; color: #2a7aab;
       background: rgba(255,255,255,0.6);
-      padding: 2px 8px;
-      border-radius: 20px;
-      letter-spacing: 0.05em;
+      padding: 2px 8px; border-radius: 20px; letter-spacing: 0.05em;
     }
 
-    /* ─── Settings Panel ─── */
+    /* ─── Settings ─── */
     #settings-panel {
-      position: fixed;
-      top: 60px; right: 14px;
-      background: rgba(255,255,255,0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      position: fixed; top: 60px; right: 14px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(255,255,255,0.7);
-      border-radius: 16px;
-      padding: 16px;
+      border-radius: 16px; padding: 16px;
       box-shadow: 0 8px 32px rgba(0,100,160,0.15);
-      display: none;
-      z-index: 300;
-      min-width: 180px;
+      display: none; z-index: 300; min-width: 180px;
     }
-    #settings-panel h3 {
-      margin: 0 0 12px;
-      font-size: 13px;
-      color: #1a5f8a;
-      font-weight: 900;
-      letter-spacing: 0.05em;
-    }
-    .settings-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 10px;
-      font-size: 13px;
-      color: #2a7aab;
-      font-weight: 700;
-    }
+    #settings-panel h3 { margin: 0 0 10px; font-size: 13px; color: #1a5f8a; font-weight: 900; }
+    .settings-label { font-size: 12px; color: #2a7aab; font-weight: 700; margin-bottom: 4px; }
     .song-select {
-      font-family: 'Nunito', sans-serif;
-      font-size: 12px;
-      font-weight: 700;
-      color: #1a5f8a;
-      background: rgba(255,255,255,0.8);
-      border: 1px solid rgba(42,122,171,0.3);
-      border-radius: 8px;
-      padding: 4px 8px;
-      cursor: pointer;
-      width: 100%;
-      margin-bottom: 10px;
+      font-family: 'Nunito', sans-serif; font-size: 12px; font-weight: 700; color: #1a5f8a;
+      background: rgba(255,255,255,0.8); border: 1px solid rgba(42,122,171,0.3);
+      border-radius: 8px; padding: 4px 8px; cursor: pointer; width: 100%; margin-bottom: 10px;
     }
     .reset-btn {
-      width: 100%;
-      padding: 8px;
-      border: none;
-      border-radius: 10px;
+      width: 100%; padding: 8px; border: none; border-radius: 10px;
       background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-      color: white;
-      font-family: 'Nunito', sans-serif;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 3px 10px rgba(238,90,36,0.3);
-      transition: transform 0.1s;
+      color: white; font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 700;
+      cursor: pointer; box-shadow: 0 3px 10px rgba(238,90,36,0.3); transition: transform 0.1s;
     }
     .reset-btn:active { transform: scale(0.96); }
 
     /* ─── 音樂進度 ─── */
     #music-progress-bar {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      height: 4px;
-      background: rgba(255,255,255,0.3);
-      z-index: 200;
-      display: none;
+      position: fixed; bottom: 0; left: 0; right: 0; height: 4px;
+      background: rgba(255,255,255,0.3); z-index: 200; display: none;
     }
     #music-progress-fill {
-      height: 100%;
-      width: 0%;
+      height: 100%; width: 0%;
       background: linear-gradient(90deg, #74d7f7, #2a7aab);
-      transition: width 0.1s;
-      border-radius: 2px;
+      transition: width 0.1s; border-radius: 2px;
     }
     #music-song-name {
-      position: fixed;
-      bottom: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 12px;
-      font-weight: 700;
-      color: rgba(26,95,138,0.8);
-      z-index: 200;
-      display: none;
-      white-space: nowrap;
-      pointer-events: none;
+      position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; font-weight: 700; color: rgba(26,95,138,0.8);
+      z-index: 200; display: none; white-space: nowrap; pointer-events: none;
     }
 
-    /* ─── 氣泡容器 ─── */
-    #app {
-      position: fixed;
-      top: 52px; left: 0; right: 0; bottom: 0;
-      display: grid;
-      grid-template-columns: repeat(var(--cols), var(--bubble-size));
-      grid-template-rows: repeat(var(--rows), var(--bubble-size));
-      gap: var(--gap);
-      justify-content: center;
-      align-content: center;
-      z-index: 1;
+    /* ─── Canvas ─── */
+    #bubble-canvas {
+      position: fixed; top: 52px; left: 0; right: 0; bottom: 0;
+      z-index: 1; cursor: crosshair;
+      width: 100%; height: calc(100% - 52px);
     }
-
-    /* ─── 氣泡樣式 ─── */
-    .bubble {
-      width: var(--bubble-size);
-      height: var(--bubble-size);
-      border-radius: 50%;
-      position: relative;
-      cursor: pointer;
-      transition: transform 0.08s ease;
-
-      /* 透明玻璃感 */
-      background: radial-gradient(
-        ellipse at 35% 30%,
-        rgba(255,255,255,0.85) 0%,
-        rgba(255,255,255,0.35) 30%,
-        rgba(180,225,248,0.25) 60%,
-        rgba(120,195,235,0.15) 100%
-      );
-      box-shadow:
-        0 2px 8px rgba(0,100,160,0.18),
-        inset 0 1px 3px rgba(255,255,255,0.9),
-        inset 0 -2px 4px rgba(120,195,235,0.3);
-      border: 1px solid rgba(255,255,255,0.6);
-    }
-
-    /* 高光點 */
-    .bubble::before {
-      content: '';
-      position: absolute;
-      top: 18%;
-      left: 22%;
-      width: 28%;
-      height: 22%;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.85);
-      filter: blur(1px);
-    }
-
-    /* 破掉的氣泡 */
-    .bubble.popped {
-      background: radial-gradient(
-        ellipse at 50% 50%,
-        rgba(160,210,235,0.08) 0%,
-        rgba(140,200,230,0.04) 100%
-      );
-      box-shadow:
-        inset 1px 1px 3px rgba(0,100,160,0.12),
-        inset -1px -1px 3px rgba(255,255,255,0.5);
-      border: 1px solid rgba(160,210,235,0.25);
-      transform: scale(0.88);
-      pointer-events: none;
-    }
-    .bubble.popped::before { display: none; }
-
-    /* ─── 粒子畫布 ─── */
     #particle-canvas {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 150;
-    }
-
-    /* ─── 慶祝動畫 ─── */
-    .celebrate {
-      position: fixed;
-      inset: 0;
-      z-index: 400;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255,255,255,0.6);
-      backdrop-filter: blur(8px);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.5s;
-    }
-    .celebrate.show {
-      opacity: 1;
-      pointer-events: all;
-    }
-    .celebrate h2 {
-      font-size: 2.5rem;
-      font-weight: 900;
-      color: #1a5f8a;
-      margin: 0 0 8px;
-      animation: celebPop 0.5s cubic-bezier(0.34,1.56,0.64,1);
-    }
-    .celebrate p {
-      font-size: 1rem;
-      color: #2a7aab;
-      font-weight: 700;
-      margin: 0 0 20px;
-    }
-    .celebrate button {
-      padding: 12px 28px;
-      border: none;
-      border-radius: 50px;
-      background: linear-gradient(135deg, #74d7f7, #2a7aab);
-      color: white;
-      font-family: 'Nunito', sans-serif;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 4px 16px rgba(42,122,171,0.4);
-    }
-    @keyframes celebPop {
-      0% { transform: scale(0.5); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
+      position: fixed; inset: 0; pointer-events: none; z-index: 150;
     }
   </style>
 </head>
 <body>
 
-<!-- Header -->
 <div class="header">
   <div class="stats">🫧 捏破 <span id="total-count">0</span> 顆</div>
   <div class="controls">
     <span class="mode-label" id="mode-label">一般</span>
-    <button class="ctrl-btn" onclick="adjustSize(-4)" title="縮小">－</button>
-    <button class="ctrl-btn" onclick="adjustSize(4)" title="放大">＋</button>
+    <button class="ctrl-btn" onclick="adjustSize(-4)" title="縮小泡泡">－</button>
+    <button class="ctrl-btn" onclick="adjustSize(4)"  title="放大泡泡">＋</button>
+    <button class="ctrl-btn" onclick="resetBubbles()" title="重置泡泡紙">🔄</button>
     <button class="ctrl-btn" id="mode-btn" onclick="toggleMode()" title="切換模式">🎵</button>
     <button class="ctrl-btn" onclick="toggleSettings()">⚙️</button>
   </div>
 </div>
 
-<!-- Settings -->
 <div id="settings-panel">
   <h3>⚙️ 設定</h3>
-  <div class="settings-row">選歌</div>
+  <div class="settings-label">選歌</div>
   <select class="song-select" id="song-select" onchange="changeSong()">
     <option value="twinkle">🌟 小星星</option>
     <option value="birthday">🎂 生日快樂</option>
-    <option value="abc">🔤 字母歌</option>
+    <option value="mary">🐑 瑪莉有隻小綿羊</option>
+    <option value="london">🌉 倫敦鐵橋</option>
+    <option value="rowboat">🚣 划船歌</option>
+    <option value="threemice">🐭 三隻瞎老鼠</option>
   </select>
   <button class="reset-btn" onclick="resetTotal()">🗑️ 歸零捏破計數</button>
 </div>
 
-<!-- 氣泡區 -->
-<div id="app"></div>
-
-<!-- 粒子畫布 -->
+<canvas id="bubble-canvas"></canvas>
 <canvas id="particle-canvas"></canvas>
-
-<!-- 音樂進度 -->
 <div id="music-progress-bar"><div id="music-progress-fill"></div></div>
 <div id="music-song-name"></div>
 
-<!-- 慶祝面板 -->
-<div class="celebrate" id="celebrate-panel">
-  <h2>🎉 演奏完畢！</h2>
-  <p id="celebrate-song-name">小星星 彈完了！</p>
-  <button onclick="dismissCelebrate()">繼續捏！</button>
-</div>
-
 <script>
-// ── 歌曲資料 ──
+// ══════════════════════════════════════════
+//  歌曲資料（音符頻率 Hz）
+// ══════════════════════════════════════════
+const C4=261.6, D4=293.7, E4=329.6, F4=349.2, G4=392.0, A4=440.0, B4=493.9, C5=523.3;
+
 const SONGS = {
   twinkle: {
     name: '🌟 小星星',
-    notes: [261.6,261.6,392,392,440,440,392,349.2,349.2,329.6,329.6,293.7,293.7,261.6,
-            392,392,349.2,349.2,329.6,329.6,293.7,
-            392,392,349.2,349.2,329.6,329.6,293.7,
-            261.6,261.6,392,392,440,440,392,349.2,349.2,329.6,329.6,293.7,293.7,261.6]
+    notes: [C4,C4,G4,G4,A4,A4,G4, F4,F4,E4,E4,D4,D4,C4,
+            G4,G4,F4,F4,E4,E4,D4, G4,G4,F4,F4,E4,E4,D4,
+            C4,C4,G4,G4,A4,A4,G4, F4,F4,E4,E4,D4,D4,C4]
   },
   birthday: {
     name: '🎂 生日快樂',
-    notes: [261.6,261.6,293.7,261.6,349.2,329.6,
-            261.6,261.6,293.7,261.6,392,349.2,
-            261.6,261.6,523.3,440,349.2,329.6,293.7,
-            466.2,466.2,440,349.2,392,349.2]
+    notes: [C4,C4,D4,C4,F4,E4, C4,C4,D4,C4,G4,F4,
+            C4,C4,C5,A4,F4,E4,D4, B4,B4,A4,F4,G4,F4]
   },
-  abc: {
-    name: '🔤 字母歌',
-    notes: [261.6,261.6,392,392,440,440,392,
-            349.2,349.2,329.6,329.6,293.7,293.7,261.6,
-            392,392,349.2,349.2,329.6,329.6,293.7,
-            392,392,349.2,349.2,329.6,329.6,293.7,
-            261.6,261.6,392,392,440,440,392,
-            349.2,349.2,329.6,329.6,293.7,293.7,261.6]
+  mary: {
+    name: '🐑 瑪莉有隻小綿羊',
+    notes: [E4,D4,C4,D4,E4,E4,E4, D4,D4,D4, E4,G4,G4,
+            E4,D4,C4,D4,E4,E4,E4, E4,D4,D4,E4,D4,C4]
+  },
+  london: {
+    name: '🌉 倫敦鐵橋',
+    notes: [G4,A4,G4,F4,E4,F4,G4, D4,E4,F4,E4,F4,G4,
+            G4,A4,G4,F4,E4,F4,G4, D4,G4,E4,C4]
+  },
+  rowboat: {
+    name: '🚣 划船歌',
+    notes: [C4,C4,C4,D4,E4, E4,D4,E4,F4,G4,
+            C5,C5,C5,G4,G4,G4,E4,E4,E4,C4,C4,C4,
+            G4,F4,E4,D4,C4]
+  },
+  threemice: {
+    name: '🐭 三隻瞎老鼠',
+    notes: [E4,D4,C4, E4,D4,C4,
+            G4,F4,F4,E4, G4,F4,F4,E4,
+            B4,B4,A4,A4,G4, B4,B4,A4,A4,G4,
+            E4,D4,C4, E4,D4,C4]
   }
 };
 
-// ── 狀態 ──
+// ══════════════════════════════════════════
+//  狀態
+// ══════════════════════════════════════════
 let bubbleSize = 38;
+const GAP = 6;
+let cols = 0, rows = 0;
+let popped = [];
+let offsetX = 0, offsetY = 0;
+
 let isMusicMode = false;
 let currentSong = 'twinkle';
 let melodyIndex = 0;
 let totalPops = parseInt(localStorage.getItem('bubble_total_pops') || '0');
+
 let isPointerDown = false;
+let lastX = null, lastY = null;
+let redrawPending = false;
+
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-// ── DOM ──
-const app = document.getElementById('app');
-const totalDisplay = document.getElementById('total-count');
-const canvas = document.getElementById('particle-canvas');
-const ctx = canvas.getContext('2d');
-const progressBar = document.getElementById('music-progress-bar');
-const progressFill = document.getElementById('music-progress-fill');
-const songNameEl = document.getElementById('music-song-name');
-const celebratePanel = document.getElementById('celebrate-panel');
+// ══════════════════════════════════════════
+//  DOM refs
+// ══════════════════════════════════════════
+const bCanvas = document.getElementById('bubble-canvas');
+const bCtx    = bCanvas.getContext('2d');
+const pCanvas = document.getElementById('particle-canvas');
+const pCtx    = pCanvas.getContext('2d');
+const totalDisplay  = document.getElementById('total-count');
+const progressBar   = document.getElementById('music-progress-bar');
+const progressFill  = document.getElementById('music-progress-fill');
+const songNameEl    = document.getElementById('music-song-name');
 
 totalDisplay.innerText = totalPops;
 
-// ── 粒子 ──
-let particles = [];
-
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+// ══════════════════════════════════════════
+//  Resize
+// ══════════════════════════════════════════
+function resizeCanvases() {
+  bCanvas.width  = window.innerWidth;
+  bCanvas.height = window.innerHeight - 52;
+  pCanvas.width  = window.innerWidth;
+  pCanvas.height = window.innerHeight;
 }
-resizeCanvas();
+
+function calcGrid() {
+  cols = Math.max(1, Math.floor((bCanvas.width  + GAP) / (bubbleSize + GAP)));
+  rows = Math.max(1, Math.floor((bCanvas.height + GAP) / (bubbleSize + GAP)));
+  offsetX = (bCanvas.width  - cols * (bubbleSize + GAP) + GAP) / 2;
+  offsetY = (bCanvas.height - rows * (bubbleSize + GAP) + GAP) / 2;
+}
+
+// ══════════════════════════════════════════
+//  繪製單顆氣泡
+// ══════════════════════════════════════════
+function drawBubble(cx, cy, isPopped) {
+  const r = bubbleSize / 2 - 0.5;
+
+  if (!isPopped) {
+    // 陰影
+    bCtx.save();
+    bCtx.shadowColor = 'rgba(0,100,160,0.2)';
+    bCtx.shadowBlur  = 5;
+    bCtx.shadowOffsetX = 1;
+    bCtx.shadowOffsetY = 2;
+
+    // 主體漸層（透明氣泡）
+    const grad = bCtx.createRadialGradient(
+      cx - r * 0.2, cy - r * 0.25, r * 0.05,
+      cx, cy, r
+    );
+    grad.addColorStop(0,   'rgba(255,255,255,0.80)');
+    grad.addColorStop(0.28,'rgba(255,255,255,0.30)');
+    grad.addColorStop(0.65,'rgba(180,225,248,0.20)');
+    grad.addColorStop(1,   'rgba(120,195,235,0.10)');
+
+    bCtx.beginPath();
+    bCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    bCtx.fillStyle = grad;
+    bCtx.fill();
+    bCtx.restore();
+
+    // 邊框
+    bCtx.beginPath();
+    bCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    bCtx.strokeStyle = 'rgba(255,255,255,0.55)';
+    bCtx.lineWidth = 1;
+    bCtx.stroke();
+
+    // 高光橢圓
+    bCtx.save();
+    bCtx.beginPath();
+    bCtx.ellipse(
+      cx - r * 0.22, cy - r * 0.27,
+      r * 0.20, r * 0.13, -0.4, 0, Math.PI * 2
+    );
+    bCtx.fillStyle = 'rgba(255,255,255,0.88)';
+    bCtx.fill();
+    bCtx.restore();
+
+  } else {
+    // 已破：淡薄內凹坑
+    const grad = bCtx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+    grad.addColorStop(0,  'rgba(130,195,228,0.09)');
+    grad.addColorStop(1,  'rgba(160,215,238,0.03)');
+    bCtx.beginPath();
+    bCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    bCtx.fillStyle = grad;
+    bCtx.fill();
+
+    bCtx.beginPath();
+    bCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    bCtx.strokeStyle = 'rgba(100,170,210,0.18)';
+    bCtx.lineWidth = 0.8;
+    bCtx.stroke();
+  }
+}
+
+// ══════════════════════════════════════════
+//  全域重繪
+// ══════════════════════════════════════════
+function redraw() {
+  redrawPending = false;
+  bCtx.clearRect(0, 0, bCanvas.width, bCanvas.height);
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const cx = offsetX + col * (bubbleSize + GAP) + bubbleSize / 2;
+      const cy = offsetY + row * (bubbleSize + GAP) + bubbleSize / 2;
+      drawBubble(cx, cy, popped[row * cols + col]);
+    }
+  }
+}
+
+function scheduleRedraw() {
+  if (!redrawPending) {
+    redrawPending = true;
+    requestAnimationFrame(redraw);
+  }
+}
+
+// ══════════════════════════════════════════
+//  初始化 / 重置
+// ══════════════════════════════════════════
+function initBubbles() {
+  resizeCanvases();
+  calcGrid();
+  popped = new Array(cols * rows).fill(false);
+  redraw();
+}
+
+// 🔄 重置畫面泡泡，但不影響累計捏破數字
+function resetBubbles() {
+  popped.fill(false);
+  scheduleRedraw();
+}
+
+// ══════════════════════════════════════════
+//  座標 → index（O(1) 數學，含圓形碰撞）
+// ══════════════════════════════════════════
+function coordToIndex(x, y) {
+  const canvasY = y - 52;
+  const col = Math.floor((x - offsetX) / (bubbleSize + GAP));
+  const row = Math.floor((canvasY - offsetY) / (bubbleSize + GAP));
+  if (col < 0 || col >= cols || row < 0 || row >= rows) return -1;
+  // 圓形碰撞：只在圓圈內才觸發
+  const cx = offsetX + col * (bubbleSize + GAP) + bubbleSize / 2;
+  const cy = offsetY + row * (bubbleSize + GAP) + bubbleSize / 2;
+  const dx = x - cx, dy = canvasY - cy;
+  const rad = bubbleSize / 2;
+  if (dx * dx + dy * dy > rad * rad) return -1;
+  return row * cols + col;
+}
+
+// ══════════════════════════════════════════
+//  捏破
+// ══════════════════════════════════════════
+function popBubble(index, x, y) {
+  if (index < 0 || popped[index]) return;
+  popped[index] = true;
+  totalPops++;
+  localStorage.setItem('bubble_total_pops', totalPops);
+  totalDisplay.innerText = totalPops;
+  scheduleRedraw();
+  spawnParticles(x, y);
+  playPop();
+  if (navigator.vibrate) navigator.vibrate(12);
+}
+
+// ══════════════════════════════════════════
+//  路徑插值（確保快速滑動不漏泡）
+// ══════════════════════════════════════════
+function sweepLine(x, y) {
+  if (lastX === null) {
+    lastX = x; lastY = y;
+    popBubble(coordToIndex(x, y), x, y);
+    return;
+  }
+  const dx = x - lastX, dy = y - lastY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const step = Math.max(4, bubbleSize / 3);
+  for (let d = 0; d <= dist; d += step) {
+    const t = dist === 0 ? 1 : d / dist;
+    popBubble(coordToIndex(lastX + dx * t, lastY + dy * t), lastX + dx * t, lastY + dy * t);
+  }
+  lastX = x; lastY = y;
+}
+
+function getPos(e) {
+  return e.touches
+    ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    : { x: e.clientX, y: e.clientY };
+}
+function handleMove(e) {
+  if (!isPointerDown) return;
+  const { x, y } = getPos(e);
+  sweepLine(x, y);
+}
+function resetPointer() { isPointerDown = false; lastX = null; lastY = null; }
+
+bCanvas.addEventListener('mousedown', (e) => {
+  isPointerDown = true; lastX = null;
+  const { x, y } = getPos(e); sweepLine(x, y);
+});
+window.addEventListener('mouseup', resetPointer);
+bCanvas.addEventListener('mousemove', handleMove);
+bCanvas.addEventListener('touchstart', (e) => {
+  e.preventDefault(); isPointerDown = true; lastX = null; handleMove(e);
+}, { passive: false });
+window.addEventListener('touchend', resetPointer);
+bCanvas.addEventListener('touchmove', (e) => {
+  e.preventDefault(); handleMove(e);
+}, { passive: false });
+
+// ══════════════════════════════════════════
+//  粒子特效
+// ══════════════════════════════════════════
+let particles = [];
+const PARTICLE_COLORS = [
+  'rgba(116,215,247,', 'rgba(255,255,255,',
+  'rgba(180,230,255,', 'rgba(42,122,171,'
+];
 
 function spawnParticles(x, y) {
-  const colors = ['rgba(116,215,247,', 'rgba(255,255,255,', 'rgba(180,230,255,', 'rgba(42,122,171,'];
   const count = 10 + Math.floor(Math.random() * 6);
   for (let i = 0; i < count; i++) {
     const angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.5;
     const speed = 1.5 + Math.random() * 3;
-    const color = colors[Math.floor(Math.random() * colors.length)];
     particles.push({
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed - 1,
       size: 2 + Math.random() * 3,
-      alpha: 0.9,
-      color,
+      color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
       life: 1
     });
   }
 }
 
 function animateParticles() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
   particles = particles.filter(p => p.life > 0);
   for (const p of particles) {
-    p.x += p.vx;
-    p.y += p.vy;
-    p.vy += 0.08;
-    p.life -= 0.03;
-    p.alpha = p.life * 0.9;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-    ctx.fillStyle = p.color + p.alpha + ')';
-    ctx.fill();
+    p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life -= 0.03;
+    pCtx.beginPath();
+    pCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    pCtx.fillStyle = p.color + (p.life * 0.9) + ')';
+    pCtx.fill();
   }
   requestAnimationFrame(animateParticles);
 }
 animateParticles();
 
-// ── 音效 ──
+// ══════════════════════════════════════════
+//  音效（Web Audio API）
+// ══════════════════════════════════════════
 function playPop() {
   if (isMusicMode) {
     const song = SONGS[currentSong];
-    if (melodyIndex >= song.notes.length) return;
     playTone(song.notes[melodyIndex], 0.22, 'triangle');
-    melodyIndex++;
+    melodyIndex = (melodyIndex + 1) % song.notes.length; // 播完自動循環
     updateProgress();
-    if (melodyIndex >= song.notes.length) {
-      melodyIndex = 0; // 播完自動循環
-    }
   } else {
     playTone(600 + Math.random() * 600, 0.06, 'sine');
   }
@@ -533,129 +556,37 @@ function playPop() {
 
 function playTone(freq, dur = 0.1, type = 'sine') {
   if (audioCtx.state === 'suspended') audioCtx.resume();
-  const osc = audioCtx.createOscillator();
+  const osc  = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   osc.type = type;
   osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
   gain.gain.setValueAtTime(0.22, audioCtx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start();
-  osc.stop(audioCtx.currentTime + dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + dur);
 }
 
-// ── 進度 ──
 function updateProgress() {
-  const song = SONGS[currentSong];
-  const pct = (melodyIndex / song.notes.length) * 100;
+  const pct = (melodyIndex / SONGS[currentSong].notes.length) * 100;
   progressFill.style.width = pct + '%';
 }
 
-// ── 渲染氣泡 ──
-function render() {
-  const gap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
-  const areaW = window.innerWidth;
-  const areaH = window.innerHeight - 52;
-  const cols = Math.max(1, Math.floor((areaW + gap) / (bubbleSize + gap)));
-  const rows = Math.max(1, Math.floor((areaH + gap) / (bubbleSize + gap)));
-
-  document.documentElement.style.setProperty('--bubble-size', bubbleSize + 'px');
-  document.documentElement.style.setProperty('--cols', cols);
-  document.documentElement.style.setProperty('--rows', rows);
-
-  app.innerHTML = '';
-  const total = cols * rows;
-  for (let i = 0; i < total; i++) {
-    const b = document.createElement('div');
-    b.className = 'bubble';
-    app.appendChild(b);
-  }
-
-  totalDisplay.innerText = totalPops;
-}
-
-// ── 捏破 ──
-function pop(el, cx, cy) {
-  if (!el || !el.classList.contains('bubble') || el.classList.contains('popped')) return;
-  el.classList.add('popped');
-  totalPops++;
-  localStorage.setItem('bubble_total_pops', totalPops);
-  totalDisplay.innerText = totalPops;
-  spawnParticles(cx, cy);
-  playPop();
-  if (navigator.vibrate) navigator.vibrate(12);
-}
-
-// ── 指標事件（路徑插值法）──
-// 記錄上一幀座標，在兩幀之間沿直線補點，確保快速滑動時不漏掉氣泡
-let lastX = null, lastY = null;
-const INTERP_STEP = () => Math.max(4, bubbleSize / 3); // 每段插值距離，隨泡泡大小調整
-
-function getPos(e) {
-  if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  return { x: e.clientX, y: e.clientY };
-}
-
-function sweepLine(x, y) {
-  // 若是第一個點，直接偵測並記錄
-  if (lastX === null) {
-    lastX = x; lastY = y;
-    pop(document.elementFromPoint(x, y), x, y);
-    return;
-  }
-
-  // 計算兩點距離，沿路每隔 INTERP_STEP px 插值一次
-  const dx = x - lastX, dy = y - lastY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  const step = INTERP_STEP();
-
-  for (let d = 0; d <= dist; d += step) {
-    const t = dist === 0 ? 1 : d / dist;
-    const ix = lastX + dx * t;
-    const iy = lastY + dy * t;
-    pop(document.elementFromPoint(ix, iy), ix, iy);
-  }
-
-  lastX = x; lastY = y;
-}
-
-function handleInteract(e) {
-  if (!isPointerDown) return;
-  const { x, y } = getPos(e);
-  sweepLine(x, y);
-}
-
-function resetLastPos() {
-  isPointerDown = false;
-  lastX = null;
-  lastY = null;
-}
-
-app.addEventListener('mousedown', (e) => { isPointerDown = true; lastX = null; const {x,y}=getPos(e); sweepLine(x,y); });
-window.addEventListener('mouseup', resetLastPos);
-app.addEventListener('mousemove', handleInteract);
-app.addEventListener('touchstart', (e) => { e.preventDefault(); isPointerDown = true; lastX = null; handleInteract(e); }, { passive: false });
-window.addEventListener('touchend', resetLastPos);
-app.addEventListener('touchmove', (e) => { e.preventDefault(); handleInteract(e); }, { passive: false });
-
-// ── 控制項 ──
+// ══════════════════════════════════════════
+//  控制項
+// ══════════════════════════════════════════
 function adjustSize(delta) {
   bubbleSize = Math.max(18, Math.min(80, bubbleSize + delta));
-  render();
+  initBubbles();
 }
 
 function toggleMode() {
   isMusicMode = !isMusicMode;
-  document.getElementById('mode-btn').textContent = isMusicMode ? '🎹' : '🎵';
+  document.getElementById('mode-btn').textContent   = isMusicMode ? '🎹' : '🎵';
   document.getElementById('mode-label').textContent = isMusicMode ? '音樂' : '一般';
   melodyIndex = 0;
-  progressBar.style.display = isMusicMode ? 'block' : 'none';
-  songNameEl.style.display = isMusicMode ? 'block' : 'none';
-  if (isMusicMode) {
-    songNameEl.textContent = SONGS[currentSong].name;
-    updateProgress();
-  }
+  progressBar.style.display  = isMusicMode ? 'block' : 'none';
+  songNameEl.style.display   = isMusicMode ? 'block' : 'none';
+  if (isMusicMode) { songNameEl.textContent = SONGS[currentSong].name; updateProgress(); }
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
@@ -673,35 +604,22 @@ function resetTotal() {
 
 function changeSong() {
   currentSong = document.getElementById('song-select').value;
-  melodyIndex = 0;
-  updateProgress();
+  melodyIndex = 0; updateProgress();
   if (isMusicMode) songNameEl.textContent = SONGS[currentSong].name;
 }
 
-// ── 慶祝 ──
-function showCelebrate() {
-  document.getElementById('celebrate-song-name').textContent = SONGS[currentSong].name + '！彈完了！';
-  celebratePanel.classList.add('show');
-}
-function dismissCelebrate() {
-  celebratePanel.classList.remove('show');
-  melodyIndex = 0;
-  updateProgress();
-}
-
-// ── 關閉設定面板（點外側） ──
 document.addEventListener('mousedown', (e) => {
   const panel = document.getElementById('settings-panel');
-  if (!panel.contains(e.target) && !e.target.closest('.ctrl-btn')) {
+  if (!panel.contains(e.target) && !e.target.closest('.ctrl-btn'))
     panel.style.display = 'none';
-  }
 });
 
-// ── 視窗縮放 ──
-window.addEventListener('resize', () => { resizeCanvas(); render(); });
+window.addEventListener('resize', initBubbles);
 
-// ── 啟動 ──
-render();
+// ══════════════════════════════════════════
+//  啟動
+// ══════════════════════════════════════════
+initBubbles();
 </script>
 </body>
 </html>
