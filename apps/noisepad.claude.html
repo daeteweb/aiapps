@@ -552,14 +552,14 @@
     <!-- BPM -->
     <div class="bpm-group">
       <button class="icon-btn" id="bpm-minus">−</button>
-      <span id="bpm-val">120</span>
+      <span id="bpm-val">100</span>
       <button class="icon-btn" id="bpm-plus">+</button>
     </div>
     <!-- Scale -->
     <select class="scale-sel" id="scale-sel">
       <option value="chromatic">全音階</option>
-      <option value="major" selected>白鍵</option>
-      <option value="pentatonic">五聲</option>
+      <option value="major">白鍵</option>
+      <option value="pentatonic" selected>五聲</option>
     </select>
     <!-- Play -->
     <button class="btn accent" id="play-btn">▶ PLAY</button>
@@ -629,8 +629,8 @@ const state = {
   cols: CONFIG.defaultCols,
   rows: CONFIG.defaultRows,
   c3Index: 6,          // which row index = C3 (counted from top)
-  bpm: 120,
-  scale: 'major',
+  bpm: 100,
+  scale: 'pentatonic',
   isPlaying: false,
   currentStep: 0,
   gridData: [],        // [col][row] = bool
@@ -1181,6 +1181,8 @@ function rebuildAll() {
 document.getElementById('start-btn').addEventListener('click', async () => {
   await initAudio();
   document.getElementById('overlay').style.display = 'none';
+  // 進場自動播放
+  togglePlay();
 });
 
 document.getElementById('play-btn').addEventListener('click', togglePlay);
