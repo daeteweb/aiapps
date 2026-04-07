@@ -1,1 +1,1 @@
-網頁跟APP，全部由AI生成，過程討論主要是Gemini，生成主要是Claude
+網頁跟APP，全部由AI生成
