@@ -684,17 +684,76 @@ function isC3(rowIdx) { return rowIdx === state.c3Index; }
 // ─────────────────────────────────────────────
 let audioReady = false;
 let scheduleId = null;
-let masterGain = null;
+
+// ── 高階合成器實例（initAudio 後建立）──────────────────
+let reverb = null;       // 共用殘響
+let fmSynth = null;      // sine → FM 合成，鐘聲/電鋼琴感
+let amSynth = null;      // square → AM 調幅，厚重復古感
+let kickSynth = null;    // MembraneSynth，大鼓
+let metalSynth = null;   // MetalSynth，鈸/金屬
+let noiseSynth = null;   // NoiseSynth，snare
 
 async function initAudio() {
   await Tone.start();
   Tone.Transport.bpm.value = state.bpm;
+
+  // ── 殘響（所有旋律音色共用）─────────────────────────
+  reverb = new Tone.Reverb({ decay: 1.8, wet: 0.25 }).toDestination();
+  await reverb.ready; // 等卷積核生成完畢
+
+  // ── FM 合成器（sine 音色）────────────────────────────
+  // 鐘聲感、電鋼琴感，泛音豐富
+  fmSynth = new Tone.PolySynth(Tone.FMSynth, {
+    harmonicity: 3,          // 調製頻率比
+    modulationIndex: 10,     // 調製深度，越大越金屬
+    oscillator: { type: 'sine' },
+    envelope: { attack: 0.001, decay: 0.3, sustain: 0.1, release: 0.8 },
+    modulation: { type: 'sine' },
+    modulationEnvelope: { attack: 0.002, decay: 0.2, sustain: 0, release: 0.5 },
+    volume: -6,
+  }).connect(reverb);
+
+  // ── AM 合成器（square 音色）──────────────────────────
+  // 調幅帶來的振幅起伏感，比純 square 更有生命力
+  amSynth = new Tone.PolySynth(Tone.AMSynth, {
+    harmonicity: 2,
+    oscillator: { type: 'square' },
+    envelope: { attack: 0.001, decay: 0.2, sustain: 0.05, release: 0.6 },
+    modulation: { type: 'square' },
+    modulationEnvelope: { attack: 0.002, decay: 0.15, sustain: 0, release: 0.4 },
+    volume: -10,             // square 諧波多，稍微壓一點避免刺耳
+  }).connect(reverb);
+
+  // ── 大鼓（MembraneSynth）────────────────────────────
+  // 物理鼓膜建模，比手刻正弦波滑落真實很多
+  kickSynth = new Tone.MembraneSynth({
+    pitchDecay: 0.08,
+    octaves: 6,
+    envelope: { attack: 0.001, decay: 0.35, sustain: 0, release: 0.1 },
+    volume: -2,
+  }).toDestination();
+
+  // ── 鈸（MetalSynth）─────────────────────────────────
+  // 多個去諧振盪器疊加，比白雜訊更有金屬質感
+  metalSynth = new Tone.MetalSynth({
+    frequency: 400,
+    envelope: { attack: 0.001, decay: 0.1, release: 0.1 },
+    harmonicity: 5.1,
+    modulationIndex: 32,
+    resonance: 4000,
+    octaves: 1.5,
+    volume: -8,
+  }).toDestination();
+
+  // ── Snare（NoiseSynth）──────────────────────────────
+  // 內建白雜訊 + 濾波，比手刻更乾淨
+  noiseSynth = new Tone.NoiseSynth({
+    noise: { type: 'white' },
+    envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.05 },
+    volume: -6,
+  }).toDestination();
+
   Tone.Transport.scheduleRepeat(tick, '16n');
-  // Master gain — 統一拉高整體音量
-  const rawCtx = Tone.context.rawContext;
-  masterGain = rawCtx.createGain();
-  masterGain.gain.value = 3.0;
-  masterGain.connect(rawCtx.destination);
   audioReady = true;
 }
 
@@ -712,67 +771,26 @@ function tick(time) {
 
 function triggerSound(rowIdx, time) {
   const timbre = state.rowTimbre[rowIdx] || 'sine';
-  const ctx = Tone.context.rawContext;
-  const out = masterGain || ctx.destination; // 接到 master gain
+  const note = Tone.Frequency(midiToFreq(rowToMidi(rowIdx))).toNote();
 
-  if (timbre === 'kick') {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(180, time);
-    osc.frequency.exponentialRampToValueAtTime(40, time + 0.15);
-    gain.gain.setValueAtTime(1.5, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
-    osc.connect(gain); gain.connect(out);
-    osc.start(time); osc.stop(time + 0.36);
-    return;
+  switch (timbre) {
+    case 'kick':
+      kickSynth.triggerAttackRelease('C1', '8n', time);
+      break;
+    case 'hihat':
+      metalSynth.triggerAttackRelease('32n', time);
+      break;
+    case 'snare':
+      noiseSynth.triggerAttackRelease('16n', time);
+      break;
+    case 'square':
+      amSynth.triggerAttackRelease(note, '8n', time);
+      break;
+    case 'sine':
+    default:
+      fmSynth.triggerAttackRelease(note, '8n', time);
+      break;
   }
-  if (timbre === 'snare') {
-    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.25, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
-    const filt = ctx.createBiquadFilter();
-    const gain = ctx.createGain();
-    src.buffer = buf;
-    filt.type = 'bandpass';
-    filt.frequency.value = 2200;
-    filt.Q.value = 0.4;
-    gain.gain.setValueAtTime(1.2, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
-    src.connect(filt); filt.connect(gain); gain.connect(out);
-    src.start(time); src.stop(time + 0.25);
-    return;
-  }
-  if (timbre === 'hihat') {
-    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
-    const filt = ctx.createBiquadFilter();
-    const gain = ctx.createGain();
-    src.buffer = buf;
-    filt.type = 'highpass';
-    filt.frequency.value = 7000;
-    gain.gain.setValueAtTime(1.0, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.09);
-    src.connect(filt); filt.connect(gain); gain.connect(out);
-    src.start(time); src.stop(time + 0.1);
-    return;
-  }
-  // Pitched synth (sine / square)
-  const midi = rowToMidi(rowIdx);
-  const freq = midiToFreq(midi);
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = timbre;
-  osc.frequency.value = freq;
-  // square wave 天生比 sine 響，稍微壓一點
-  const peakGain = timbre === 'square' ? 0.6 : 0.9;
-  gain.gain.setValueAtTime(peakGain, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
-  osc.connect(gain); gain.connect(out);
-  osc.start(time); osc.stop(time + 0.51);
 }
 
 // ─────────────────────────────────────────────
