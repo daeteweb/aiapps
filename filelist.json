@@ -78,5 +78,10 @@
     "path": "apps/wallpaper-generator-3.html",
     "title": "✦ WALLCRAFT — AI桌布產生器",
     "description": "可以用基本圖案或是emoji產生隨機圖案的桌布，隨機到喜歡的桌布可以下載"
+  },
+  {
+    "path": "apps/world.clock.html",
+    "title": "世界時鐘 - World Clock",
+    "description": ""
   }
 ]
