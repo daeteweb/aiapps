@@ -1,5 +1,10 @@
 [
   {
+    "path": "apps/50.deepseek.html",
+    "title": "五十音練習",
+    "description": ""
+  },
+  {
     "path": "apps/50.gemini.html",
     "title": "五十音練習_gemma-4-26b-a4b",
     "description": ""
