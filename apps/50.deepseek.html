@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>五十音練習</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:'Noto Sans JP','Inter','Segoe UI',sans-serif;background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);color:#eee;position:relative}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(79,195,247,.06) 0%,transparent 60%),radial-gradient(ellipse at 80% 50%,rgba(124,77,255,.06) 0%,transparent 60%);pointer-events:none;z-index:0}
+#app{width:100%;max-width:460px;height:100dvh;display:flex;flex-direction:column;padding:20px 20px 16px;margin:0 auto;position:relative;z-index:1;gap:10px}
+
+/* Header */
+.header{display:flex;align-items:center;justify-content:space-between;padding:0 4px 4px}
+.header-title{font-size:15px;font-weight:600;color:rgba(255,255,255,.7);letter-spacing:2px;display:flex;align-items:center;gap:8px}
+.header-title span{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4fc3f7;box-shadow:0 0 10px rgba(79,195,247,.5)}
+.header-badge{font-size:12px;background:rgba(79,195,247,.15);color:#4fc3f7;padding:4px 12px;border-radius:20px;border:1px solid rgba(79,195,247,.25);letter-spacing:.5px}
+
+/* Filters */
+#filters{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:6px 0 2px}
+.filter-btn{padding:7px 14px;border:1.5px solid rgba(255,255,255,.12);border-radius:20px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);font-size:13px;font-family:inherit;cursor:pointer;transition:all .25s ease;user-select:none;touch-action:manipulation;backdrop-filter:blur(4px)}
+.filter-btn:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.7)}
+.filter-btn.active{border-color:#4fc3f7;color:#4fc3f7;background:rgba(79,195,247,.12);box-shadow:0 0 16px rgba(79,195,247,.15)}
+.filter-btn:active{transform:scale(.94)}
+#reset-btn{padding:7px 14px;border:1.5px solid rgba(229,115,115,.3);border-radius:20px;background:rgba(229,115,115,.06);color:#e57373;font-size:13px;font-family:inherit;cursor:pointer;transition:all .25s ease;user-select:none;touch-action:manipulation;margin-left:auto}
+#reset-btn:hover{background:rgba(229,115,115,.15);border-color:#e57373}
+
+/* Card */
+#card{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,.04);border-radius:24px;border:1px solid rgba(255,255,255,.06);backdrop-filter:blur(12px);position:relative;overflow:hidden;min-height:0}
+#card::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:conic-gradient(from 0deg at 50% 50%,transparent,rgba(79,195,247,.03),transparent,rgba(124,77,255,.03),transparent);animation:rotateBg 20s linear infinite;pointer-events:none}
+@keyframes rotateBg{100%{transform:rotate(360deg)}}
+
+#kana-display{font-size:clamp(72px,22vw,130px);font-weight:700;color:#fff;position:relative;z-index:1;transition:all .3s cubic-bezier(.34,1.56,.64,1);user-select:none;text-shadow:0 0 40px rgba(79,195,247,.2);line-height:1.2}
+#kana-display.correct{animation:pop .35s cubic-bezier(.34,1.56,.64,1);text-shadow:0 0 60px rgba(76,175,80,.5)}
+#kana-display.shake{animation:shake .35s ease}
+@keyframes pop{0%{transform:scale(.8);opacity:.4}50%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-10px)}30%{transform:translateX(10px)}45%{transform:translateX(-7px)}60%{transform:translateX(7px)}75%{transform:translateX(-3px)}90%{transform:translateX(3px)}}
+
+#romaji-hint{font-size:17px;color:rgba(255,255,255,.3);min-height:30px;letter-spacing:3px;font-family:'Inter',monospace;position:relative;z-index:1;margin-top:4px;transition:color .2s}
+
+/* Input */
+#input-area{position:relative;z-index:1;width:100%;max-width:300px;margin-top:8px}
+#kana-input{width:100%;padding:14px 20px;font-size:24px;border:2px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.06);color:#fff;text-align:center;outline:none;caret-color:#4fc3f7;letter-spacing:3px;font-family:'Inter',monospace;transition:border-color .25s,box-shadow .25s;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+#kana-input:focus{border-color:#4fc3f7;box-shadow:0 4px 30px rgba(79,195,247,.15)}
+#kana-input::placeholder{color:rgba(255,255,255,.15)}
+
+/* Stats bar */
+#stats-bar{display:flex;align-items:center;gap:14px;padding:4px 2px}
+#stats-bar .stat-item{display:flex;align-items:center;gap:5px;font-size:12px;color:rgba(255,255,255,.45)}
+#stats-bar .stat-item .num{color:rgba(255,255,255,.8);font-weight:600;font-family:'Inter',monospace;min-width:20px}
+#stats-bar .stat-item .label{color:rgba(255,255,255,.35)}
+.stat-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+.stat-dot.green{background:#4caf50;box-shadow:0 0 8px rgba(76,175,80,.4)}
+.stat-dot.red{background:#e57373;box-shadow:0 0 8px rgba(229,115,115,.4)}
+.stat-dot.blue{background:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,.4)}
+
+/* Progress */
+#progress-wrap{position:relative;padding:2px 0}
+#progress-track{height:5px;background:rgba(255,255,255,.06);border-radius:10px;overflow:hidden;position:relative}
+#progress-bar{height:100%;background:linear-gradient(90deg,#4fc3f7,#7c4dff);border-radius:10px;transition:width .4s cubic-bezier(.34,1.56,.64,1);width:0%;position:relative}
+#progress-bar::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);animation:shimmer 2s ease-in-out infinite}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+#progress-label{text-align:right;font-size:11px;color:rgba(255,255,255,.25);font-family:'Inter',monospace;margin-top:4px;letter-spacing:1px}
+
+/* Summary screen */
+#summary{display:none;flex-direction:column;align-items:center;justify-content:center;flex:1;position:relative;z-index:1;gap:16px;animation:fadeIn .5s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.summary-icon{font-size:50px;margin-bottom:4px;animation:bounceIn .6s cubic-bezier(.34,1.56,.64,1)}
+@keyframes bounceIn{0%{transform:scale(0)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
+.summary-title{font-size:26px;font-weight:700;color:#fff;letter-spacing:2px}
+.summary-sub{font-size:14px;color:rgba(255,255,255,.4);margin-top:-4px}
+.summary-stats{display:flex;gap:32px;margin:4px 0 8px}
+.summary-stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+.summary-stat .num{font-size:32px;font-weight:700;font-family:'Inter',monospace}
+.summary-stat .num.green{color:#4caf50;text-shadow:0 0 20px rgba(76,175,80,.3)}
+.summary-stat .num.red{color:#e57373;text-shadow:0 0 20px rgba(229,115,115,.3)}
+.summary-stat .lbl{font-size:12px;color:rgba(255,255,255,.35)}
+.summary-divider{width:60px;height:2px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);border-radius:2px}
+
+/* Wrong list on summary */
+#wrong-list-wrap{max-height:120px;overflow-y:auto;width:100%;max-width:320px;display:none;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent}
+#wrong-list-wrap::-webkit-scrollbar{width:4px}
+#wrong-list-wrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+#wrong-list{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:4px}
+.wrong-item{display:flex;align-items:center;gap:4px;background:rgba(229,115,115,.1);border:1px solid rgba(229,115,115,.2);border-radius:8px;padding:4px 10px;font-size:13px}
+.wrong-item .k{color:#e57373;font-weight:700}
+.wrong-item .r{color:rgba(255,255,255,.4);font-size:11px;font-family:'Inter',monospace}
+
+#restart-btn{padding:14px 48px;font-size:17px;font-weight:600;border:2px solid #4fc3f7;border-radius:14px;background:rgba(79,195,247,.1);color:#4fc3f7;cursor:pointer;touch-action:manipulation;font-family:inherit;transition:all .25s ease;box-shadow:0 4px 20px rgba(79,195,247,.1);margin-top:4px}
+#restart-btn:hover{background:rgba(79,195,247,.2);box-shadow:0 4px 30px rgba(79,195,247,.2);transform:translateY(-1px)}
+#restart-btn:active{transform:scale(.96)}
+.summary-hint{font-size:12px;color:rgba(255,255,255,.2);letter-spacing:1px}
+
+/* Confetti */
+#confetti-container{position:fixed;inset:0;pointer-events:none;z-index:100;overflow:hidden}
+.confetti-piece{position:absolute;top:-10px;width:8px;height:8px;border-radius:2px;animation:confettiFall linear forwards}
+@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
+
+/* Responsive */
+@media(max-width:400px){
+  #app{padding:14px 12px 10px}
+  .filter-btn{padding:6px 11px;font-size:12px}
+  #kana-input{padding:12px 16px;font-size:20px}
+  #kana-display{font-size:clamp(56px,18vw,90px)}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div class="header-title"><span></span>五十音練習</div>
+    <div class="header-badge" id="pack-badge">第 1 包</div>
+  </div>
+
+  <div id="filters">
+    <button class="filter-btn active" data-type="hira">平假名</button>
+    <button class="filter-btn" data-type="kata">片假名</button>
+    <button class="filter-btn" data-type="daku">濁音</button>
+    <button class="filter-btn" data-type="yoon">拗音</button>
+    <button id="reset-btn">↻</button>
+  </div>
+
+  <div id="card">
+    <div id="kana-display">あ</div>
+    <div id="romaji-hint">&nbsp;</div>
+    <div id="input-area">
+      <input id="kana-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text" autofocus>
+    </div>
+  </div>
+
+  <div id="stats-bar">
+    <div class="stat-item"><span class="stat-dot blue"></span><span class="label">進度</span> <span class="num" id="stat-progress">0</span><span class="label">/ <span id="stat-total">0</span></span></div>
+    <div class="stat-item"><span class="stat-dot green"></span><span class="label">連續</span> <span class="num" id="stat-streak">0</span></div>
+    <div class="stat-item"><span class="stat-dot red"></span><span class="label">錯誤</span> <span class="num" id="stat-errors">0</span></div>
+  </div>
+
+  <div id="progress-wrap">
+    <div id="progress-track"><div id="progress-bar"></div></div>
+    <div id="progress-label"></div>
+  </div>
+
+  <div id="summary">
+    <div class="summary-icon">🎉</div>
+    <div class="summary-title">作答完成！</div>
+    <div class="summary-sub">本包所有題目已輪完</div>
+    <div class="summary-divider"></div>
+    <div class="summary-stats">
+      <div class="summary-stat"><span class="num green" id="sum-correct">0</span><span class="lbl">正確</span></div>
+      <div class="summary-stat"><span class="num red" id="sum-wrong">0</span><span class="lbl">錯誤</span></div>
+    </div>
+    <div class="summary-divider"></div>
+    <div id="wrong-list-wrap"><div id="wrong-list"></div></div>
+    <button id="restart-btn">重新開始</button>
+    <div class="summary-hint">Space / Enter 快速重啟</div>
+  </div>
+</div>
+
+<div id="confetti-container"></div>
+
+<script>
+const KANA = {
+  hira: {
+    'あ':'a','い':'i','う':'u','え':'e','お':'o',
+    'か':'ka','き':'ki','く':'ku','け':'ke','こ':'ko',
+    'さ':'sa','し':'shi','す':'su','せ':'se','そ':'so',
+    'た':'ta','ち':'chi','つ':'tsu','て':'te','と':'to',
+    'な':'na','に':'ni','ぬ':'nu','ね':'ne','の':'no',
+    'は':'ha','ひ':'hi','ふ':'fu','へ':'he','ほ':'ho',
+    'ま':'ma','み':'mi','む':'mu','め':'me','も':'mo',
+    'や':'ya','ゆ':'yu','よ':'yo',
+    'ら':'ra','り':'ri','る':'ru','れ':'re','ろ':'ro',
+    'わ':'wa','を':'wo','ん':'n'
+  },
+  kata: {
+    'ア':'a','イ':'i','ウ':'u','エ':'e','オ':'o',
+    'カ':'ka','キ':'ki','ク':'ku','ケ':'ke','コ':'ko',
+    'サ':'sa','シ':'shi','ス':'su','セ':'se','ソ':'so',
+    'タ':'ta','チ':'chi','ツ':'tsu','テ':'te','ト':'to',
+    'ナ':'na','ニ':'ni','ヌ':'nu','ネ':'ne','ノ':'no',
+    'ハ':'ha','ヒ':'hi','フ':'fu','ヘ':'he','ホ':'ho',
+    'マ':'ma','ミ':'mi','ム':'mu','メ':'me','モ':'mo',
+    'ヤ':'ya','ユ':'yu','ヨ':'yo',
+    'ラ':'ra','リ':'ri','ル':'ru','レ':'re','ロ':'ro',
+    'ワ':'wa','ヲ':'wo','ン':'n'
+  },
+  daku: {
+    'が':'ga','ぎ':'gi','ぐ':'gu','げ':'ge','ご':'go',
+    'ざ':'za','じ':'ji','ず':'zu','ぜ':'ze','ぞ':'zo',
+    'だ':'da','ぢ':'dji','づ':'dzu','で':'de','ど':'do',
+    'ば':'ba','び':'bi','ぶ':'bu','べ':'be','ぼ':'bo',
+    'ぱ':'pa','ぴ':'pi','ぷ':'pu','ぺ':'pe','ぽ':'po',
+    'ガ':'ga','ギ':'gi','グ':'gu','ゲ':'ge','ゴ':'go',
+    'ザ':'za','ジ':'ji','ズ':'zu','ゼ':'ze','ゾ':'zo',
+    'ダ':'da','ヂ':'dji','ヅ':'dzu','デ':'de','ド':'do',
+    'バ':'ba','ビ':'bi','ブ':'bu','ベ':'be','ボ':'bo',
+    'パ':'pa','ピ':'pi','プ':'pu','ペ':'pe','ポ':'po'
+  },
+  yoon: {
+    'きゃ':'kya','きゅ':'kyu','きょ':'kyo',
+    'しゃ':'sha','しゅ':'shu','しょ':'sho',
+    'ちゃ':'cha','ちゅ':'chu','ちょ':'cho',
+    'にゃ':'nya','にゅ':'nyu','にょ':'nyo',
+    'ひゃ':'hya','ひゅ':'hyu','ひょ':'hyo',
+    'みゃ':'mya','みゅ':'myu','みょ':'myo',
+    'りゃ':'rya','りゅ':'ryu','りょ':'ryo',
+    'ぎゃ':'gya','ぎゅ':'gyu','ぎょ':'gyo',
+    'じゃ':'ja','じゅ':'ju','じょ':'jo',
+    'ぢゃ':'dja','ぢゅ':'dju','ぢょ':'djo',
+    'びゃ':'bya','びゅ':'byu','びょ':'byo',
+    'ぴゃ':'pya','ぴゅ':'pyu','ぴょ':'pyo',
+    'キャ':'kya','キュ':'kyu','キョ':'kyo',
+    'シャ':'sha','シュ':'shu','ショ':'sho',
+    'チャ':'cha','チュ':'chu','チョ':'cho',
+    'ニャ':'nya','ニュ':'nyu','ニョ':'nyo',
+    'ヒャ':'hya','ヒュ':'hyu','ヒョ':'hyo',
+    'ミャ':'mya','ミュ':'myu','ミョ':'myo',
+    'リャ':'rya','リュ':'ryu','リョ':'ryo',
+    'ギャ':'gya','ギュ':'gyu','ギョ':'gyo',
+    'ジャ':'ja','ジュ':'ju','ジョ':'jo',
+    'ヂャ':'dja','ヂュ':'dju','ヂョ':'djo',
+    'ビャ':'bya','ビュ':'byu','ビョ':'byo',
+    'ピャ':'pya','ピュ':'pyu','ピョ':'pyo'
+  }
+};
+
+const FILTERS = ['hira','kata','daku','yoon'];
+
+const state = {
+  active: {hira:true,kata:false,daku:false,yoon:false},
+  pool: [],
+  pack: [],
+  packIndex: 1,
+  current: 0,
+  errors: 0,
+  streak: 0,
+  maxStreak: 0,
+  wrongList: []
+};
+
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const display = $('#kana-display');
+const input = $('#kana-input');
+const hint = $('#romaji-hint');
+const progressBar = $('#progress-bar');
+const progressLabel = $('#progress-label');
+const statProgress = $('#stat-progress');
+const statTotal = $('#stat-total');
+const statStreak = $('#stat-streak');
+const statErrors = $('#stat-errors');
+const packBadge = $('#pack-badge');
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}
+  return a;
+}
+
+function buildPool(){
+  let pool = [];
+  FILTERS.forEach(k=>{if(state.active[k])pool.push(...Object.entries(KANA[k]))});
+  return pool;
+}
+
+function showQuiz(){
+  $('#card').style.display='flex';
+  $('#summary').style.display='none';
+}
+function showSummary(){
+  state.packIndex++;
+  const totalQ = state.pack.length;
+  const correct = totalQ - state.errors;
+  $('#sum-correct').textContent = Math.max(0,correct);
+  $('#sum-wrong').textContent = state.errors;
+
+  const wl = $('#wrong-list');
+  wl.innerHTML = '';
+  if(state.wrongList.length>0){
+    const uniq = [...new Map(state.wrongList.map(e=>[e[0],e])).values()];
+    uniq.forEach(([k,r])=>{
+      const el = document.createElement('span');
+      el.className='wrong-item';
+      el.innerHTML=`<span class="k">${k}</span><span class="r">${r}</span>`;
+      wl.appendChild(el);
+    });
+    $('#wrong-list-wrap').style.display='block';
+  }else{
+    $('#wrong-list-wrap').style.display='none';
+  }
+
+  $('#card').style.display='none';
+  const s=$('#summary');s.style.display='flex';
+  setTimeout(()=>$('#restart-btn').focus(),100);
+  fireConfetti();
+}
+
+function startPack(){
+  state.pool = buildPool();
+  if(state.pool.length===0){state.pool=[['あ','a']]}
+  state.pack = shuffle([...state.pool]);
+  state.current = 0;
+  state.errors = 0;
+  state.streak = 0;
+  state.maxStreak = 0;
+  state.wrongList = [];
+  showQuiz();
+  showCurrent();
+}
+
+function showCurrent(){
+  if(state.current >= state.pack.length){showSummary();updateProgress();return}
+  const [kana, romaji] = state.pack[state.current];
+  display.textContent = kana;
+  display.className = '';
+  hint.textContent = '‧'.repeat(romaji.length);
+  hint.style.color='rgba(255,255,255,.3)';
+  input.value = '';
+  input.focus();
+  updateProgress();
+  updateStats();
+}
+
+function updateProgress(){
+  const total = state.pack.length;
+  const done = state.current;
+  const pct = total>0 ? (done/total*100) : 0;
+  progressBar.style.width = pct+'%';
+  statProgress.textContent = done;
+  statTotal.textContent = total;
+  packBadge.textContent = `第 ${state.packIndex} 包`;
+  const pctShow = Math.round(pct);
+  progressLabel.textContent = pctShow > 0 ? `${pctShow}%` : '';
+}
+
+function updateStats(){
+  statStreak.textContent = state.streak;
+  statErrors.textContent = state.errors;
+}
+
+function shakeDisplay(){
+  display.className = 'shake';
+  hint.style.color='rgba(229,115,115,.6)';
+  setTimeout(()=>{display.className=''},350);
+}
+
+function flashCorrect(){
+  display.className = 'correct';
+  hint.style.color='rgba(76,175,80,.6)';
+  setTimeout(()=>{display.className=''},350);
+}
+
+function handleInput(){
+  const val = input.value.toLowerCase().trim();
+  if(!val) return;
+  if(state.current >= state.pack.length) return;
+  const [kana, romaji] = state.pack[state.current];
+  const expected = romaji.toLowerCase();
+  const partial = expected.startsWith(val) && val.length <= expected.length;
+  if(partial){
+    hint.textContent = expected.slice(0,val.length)+'‧'.repeat(expected.length-val.length);
+  }
+  if(val === expected){
+    state.current++;
+    state.streak++;
+    if(state.streak>state.maxStreak)state.maxStreak=state.streak;
+    flashCorrect();
+    setTimeout(showCurrent,300);
+  }else if(!expected.startsWith(val)){
+    state.errors++;
+    state.streak=0;
+    state.wrongList.push([kana,romaji]);
+    shakeDisplay();
+    input.value = '';
+    hint.textContent = '‧'.repeat(expected.length);
+    updateStats();
+  }
+}
+
+function restartApp(){
+  startPack();
+}
+
+function fireConfetti(){
+  const c = $('#confetti-container');
+  c.innerHTML = '';
+  const colors = ['#4fc3f7','#7c4dff','#4caf50','#e57373','#ffb74d','#f06292','#fff176','#81c784'];
+  for(let i=0;i<60;i++){
+    const el = document.createElement('div');
+    el.className='confetti-piece';
+    el.style.left=Math.random()*100+'%';
+    el.style.width=(4+Math.random()*6)+'px';
+    el.style.height=(4+Math.random()*6)+'px';
+    el.style.background=colors[Math.floor(Math.random()*colors.length)];
+    el.style.borderRadius=Math.random()>.5?'50%':'2px';
+    el.style.animationDuration=(1.5+Math.random()*2)+'s';
+    el.style.animationDelay=Math.random()*.5+'s';
+    c.appendChild(el);
+  }
+  setTimeout(()=>c.innerHTML='',4000);
+}
+
+input.addEventListener('input',handleInput);
+
+$$('.filter-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    if(btn.id==='reset-btn'){restartApp();return}
+    const type = btn.dataset.type;
+    state.active[type] = !state.active[type];
+    btn.classList.toggle('active');
+    restartApp();
+  });
+});
+
+document.addEventListener('keydown',e=>{
+  if($('#summary').style.display==='flex' && (e.key===' '||e.key==='Enter')){
+    e.preventDefault();
+    restartApp();
+  }
+});
+
+$('#restart-btn').addEventListener('click',restartApp);
+
+// Keep input focused on any tap outside
+document.addEventListener('touchstart',e=>{
+  if(e.target.tagName!=='INPUT' && $('#card').style.display!=='none')input.focus();
+});
+
+startPack();
+</script>
+</body>
+</html>
