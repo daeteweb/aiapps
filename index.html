@@ -461,11 +461,11 @@
                 menu.appendChild(navItem);
             });
 
-            if (!mobile) showReadme();
+            if (!mobile) showApp('apps/world.clock.html');
 
         } catch (err) {
             menu.innerHTML = '<div style="padding:20px; color:#f87171;">讀取 filelist.json 失敗，請確認 apps/ 資料夾與設定。</div>';
-            if (!isMobile()) showReadme();
+            if (!isMobile()) showApp('apps/world.clock.html');
         }
     }
 
