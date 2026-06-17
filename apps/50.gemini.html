@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>五十音練習_gemma-4-26b-a4b</title>
+    <title>五十音練習專家</title>
     <style>
         :root {
             --bg-color: #f5f7fa;
@@ -160,7 +160,7 @@
 
         /* 統計畫面 */
         #stats-screen {
-            display: none;
+            display: none; /* 由 JS 控制顯示 */
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: var(--card-bg);
@@ -171,7 +171,7 @@
             z-index: 10;
         }
 
-        #stats-screen h2 { font-size: 1.5rem; }
+        #stats-screen h2 { font-size: 1.5rem; margin-top: 0; }
         .error-count-text { font-size: 3rem; color: var(--error-color); margin: 10px 0; }
 
         button {
@@ -201,6 +201,7 @@
 
 <div class="header">
     <div class="settings">
+        <!-- 預設勾選平假名與片假名 -->
         <label><input type="checkbox" class="type-opt" value="hiragana" checked> 平假名</label>
         <label><input type="checkbox" class="type-opt" value="katakana" checked> 片假名</label>
         <label><input type="checkbox" class="type-opt" value="dakuten"> 濁音</label>
@@ -218,7 +219,7 @@
 <div class="container">
     <!-- 遊戲區域 -->
     <div id="game-area">
-        <div id="character-display">あ</div>
+        <div id="character-display">-</div>
         <input type="text" id="romaji-input" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="...">
         
         <div class="progress-container">
@@ -303,12 +304,19 @@ const typeOptions = document.querySelectorAll('.type-opt');
 
 /** 邏輯功能 **/
 
-// 初始化遊戲/重新載入題庫
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+// 初始化遊戲或重新載入題庫包
 function initGame() {
     currentPool = [];
     errorCount = 0;
     currentIndex = 0;
-    isGameActive = true;
 
     // 收集所有勾選的類型
     typeOptions.forEach(opt => {
@@ -322,19 +330,13 @@ function initGame() {
         return;
     }
 
-    // 洗牌
+    // 洗牌題庫
     shuffle(currentPool);
+    isGameActive = true;
     
     statsScreen.style.display = 'none';
     inputEl.disabled = false;
     renderQuestion();
-}
-
-function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
 }
 
 function renderQuestion() {
@@ -343,14 +345,16 @@ function renderQuestion() {
         const item = currentPool[currentIndex];
         displayEl.innerText = item.c;
         inputEl.value = '';
-        inputEl.focus();
         
         // 更新進度條與文字
         progressTextEl.innerText = `${currentIndex + 1} / ${currentPool.length}`;
         const percent = (currentIndex / currentPool.length) * 100;
         progressBarEl.style.width = `${percent}%`;
+
+        // 重點：確保手機輸入法焦點，不讓它縮回去
+        setTimeout(() => inputEl.focus(), 10);
     } else {
-        // 一輪結束，顯示統計畫面
+        // 一輪結束（全部題目跑完一遍），顯示統計畫面
         showStats();
     }
 }
@@ -362,49 +366,49 @@ function showStats() {
     statsScreen.style.display = 'flex';
 }
 
-// 處理輸入錯誤的震動效果
+// 觸發錯誤震動
 function triggerError() {
     errorCount++;
     displayEl.classList.remove('shake-effect');
-    void displayEl.offsetWidth; // 強制重繪以重新觸發動畫
+    void displayEl.offsetWidth; // 重置動畫
     displayEl.classList.add('shake-effect');
     inputEl.value = '';
 }
 
-// 輸入監聽器
+/** 事件監聽 **/
+
+// 監聽輸入 (不需 Enter)
 inputEl.addEventListener('input', (e) => {
     if (!isGameActive) return;
 
     const val = e.target.value.toLowerCase().trim();
     const target = currentPool[currentIndex].r;
 
-    // 如果輸入與目標完全吻合
+    // 如果輸入完全正確
     if (val === target) {
         currentIndex++;
         renderQuestion();
     } 
-    // 如果目前输入的內容不符合正確拼音的「前綴」，表示打錯了，觸發震動
+    // 如果使用者打錯了路徑（例如目標 ka 但開頭打了 ki），觸發錯誤震動
     else if (val.length > 0 && !target.startsWith(val)) {
         triggerError();
     }
 });
 
-/** 事件監聽 **/
-
-// 設定項改變時重新載入
+// 當勾選狀態改變時，立即重新載入題庫
 typeOptions.forEach(opt => {
     opt.addEventListener('change', initGame);
 });
 
-// 重啟按鈕
+// 重啟按鈕點擊
 restartBtn.addEventListener('click', initGame);
 
-// 暗黑模式切換
+// 深色模式切換
 themeSwitch.addEventListener('change', () => {
     document.body.setAttribute('data-theme', themeSwitch.checked ? 'dark' : 'light');
 });
 
-// 鍵盤快捷鍵 (Space / Enter)
+// PC 端快捷鍵: Space 或 Enter 重啟
 window.addEventListener('keydown', (e) => {
     if (!isGameActive && statsScreen.style.display === 'flex') {
         if (e.code === 'Space' || e.code === 'Enter') {
@@ -413,10 +417,9 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// 預設啟動一次遊戲 (初始化)
+// 頁面載入時自動啟動遊戲
 window.onload = () => {
-    // 確保手機點擊輸入框時不會讓鍵盤縮回去，我們在 input 事件後也會 focus
-    inputEl.focus();
+    initGame();
 };
 
 </script>
