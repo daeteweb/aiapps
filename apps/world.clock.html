@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>世界時鐘 - World Clock</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:#2a2a4a; border-radius:4px; }
+::selection { background:rgba(90,122,255,0.3); }
+
+body {
+    font-family: 'SF Pro Display','Segoe UI',system-ui,-apple-system,sans-serif;
+    min-height:100vh;
+    background:#06060c;
+    color:#fff;
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    overflow-x:hidden;
+    position:relative;
+}
+body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(42,74,255,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(120,60,255,0.04) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(0,200,255,0.03) 0%, transparent 70%);
+    pointer-events:none;
+    z-index:0;
+}
+
+/* floating dots */
+.dots {
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    z-index:0;
+    overflow:hidden;
+}
+.dots span {
+    position:absolute;
+    width:2px; height:2px;
+    background:rgba(255,255,255,0.06);
+    border-radius:50%;
+    animation:floatDot linear infinite;
+}
+@keyframes floatDot {
+    0% { transform:translateY(100vh) scale(0); opacity:0; }
+    10% { opacity:1; }
+    90% { opacity:1; }
+    100% { transform:translateY(-10vh) scale(1); opacity:0; }
+}
+
+h1 {
+    position:relative;
+    z-index:1;
+    text-align:center;
+    font-weight:500;
+    font-size:1.3rem;
+    letter-spacing:4px;
+    color:rgba(255,255,255,0.3);
+    margin-bottom:22px;
+    text-transform:uppercase;
+}
+
+/* ─── main clock card ─── */
+.main-clock-wrap {
+    position:relative;
+    z-index:1;
+    background:rgba(18,18,30,0.75);
+    backdrop-filter:blur(24px);
+    -webkit-backdrop-filter:blur(24px);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:28px;
+    padding:28px 36px 20px;
+    margin-bottom:22px;
+    width:100%;
+    max-width:520px;
+    box-shadow:0 8px 50px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+    transition:border-color 0.4s, box-shadow 0.4s;
+}
+.main-clock-wrap:hover {
+    border-color:rgba(90,122,255,0.2);
+    box-shadow:0 8px 60px rgba(42,74,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.clock-area {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:150px;
+    position:relative;
+}
+#clock-digital {
+    font-size:4.4rem;
+    font-weight:250;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:5px;
+    line-height:1.15;
+    background:linear-gradient(135deg, #e0e8ff 0%, #90b0ff 100%);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    background-clip:text;
+    filter:drop-shadow(0 0 30px rgba(80,160,255,0.15));
+}
+#clock-digital .seconds {
+    font-size:2.2rem;
+    background:linear-gradient(135deg, #6a8aff 0%, #4a6aff 100%);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    background-clip:text;
+    opacity:0.7;
+}
+.analog-wrap {
+    display:none;
+    width:150px; height:150px;
+    flex-shrink:0;
+    filter:drop-shadow(0 0 20px rgba(80,160,255,0.1));
+}
+.analog-wrap canvas { width:100%; height:100%; display:block; }
+
+.info-row {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-top:14px;
+    padding-top:12px;
+    border-top:1px solid rgba(255,255,255,0.04);
+}
+#date-display {
+    font-size:0.85rem;
+    color:rgba(255,255,255,0.3);
+    letter-spacing:2px;
+    font-weight:400;
+}
+.info-actions {
+    display:flex;
+    gap:6px;
+    align-items:center;
+}
+.info-actions button {
+    padding:6px 14px;
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:30px;
+    background:rgba(255,255,255,0.03);
+    color:rgba(255,255,255,0.4);
+    font-size:0.75rem;
+    cursor:pointer;
+    transition:all 0.3s;
+    letter-spacing:0.5px;
+    white-space:nowrap;
+}
+.info-actions button:hover {
+    background:rgba(255,255,255,0.07);
+    border-color:rgba(255,255,255,0.18);
+    color:rgba(255,255,255,0.7);
+}
+.info-actions .active-format {
+    background:rgba(90,122,255,0.15);
+    border-color:rgba(90,122,255,0.3);
+    color:#90a8ff;
+}
+
+/* ─── controls ─── */
+.controls {
+    position:relative;
+    z-index:1;
+    width:100%;
+    max-width:520px;
+    display:flex;
+    gap:8px;
+    margin-bottom:22px;
+}
+.controls .select-wrap {
+    flex:1;
+    position:relative;
+}
+.controls select {
+    width:100%;
+    padding:11px 36px 11px 14px;
+    border-radius:16px;
+    border:1px solid rgba(255,255,255,0.06);
+    background:rgba(18,18,30,0.75);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    color:rgba(255,255,255,0.7);
+    font-size:0.85rem;
+    outline:none;
+    cursor:pointer;
+    appearance:none;
+    -webkit-appearance:none;
+    transition:border-color 0.3s;
+}
+.controls select:focus { border-color:rgba(90,122,255,0.3); }
+.controls select option {
+    background:#0c0c18;
+    color:rgba(255,255,255,0.7);
+    padding:8px;
+}
+.controls select optgroup {
+    color:rgba(255,255,255,0.25);
+    font-size:0.7rem;
+    letter-spacing:2px;
+    text-transform:uppercase;
+}
+.controls select optgroup option { padding-left:16px; }
+.controls .select-arrow {
+    position:absolute;
+    right:14px;
+    top:50%;
+    transform:translateY(-50%);
+    color:rgba(255,255,255,0.2);
+    pointer-events:none;
+    font-size:0.7rem;
+}
+.controls .add-btn {
+    padding:11px 22px;
+    border:none;
+    border-radius:16px;
+    background:linear-gradient(135deg, #2a4aff, #1a3aee);
+    color:#fff;
+    font-size:0.85rem;
+    font-weight:500;
+    cursor:pointer;
+    transition:all 0.3s;
+    white-space:nowrap;
+    letter-spacing:0.5px;
+    box-shadow:0 4px 20px rgba(42,74,255,0.2);
+}
+.controls .add-btn:hover {
+    background:linear-gradient(135deg, #3a5aff, #2a4aff);
+    box-shadow:0 6px 28px rgba(42,74,255,0.35);
+    transform:translateY(-1px);
+}
+.controls .add-btn:active { transform:translateY(0); }
+
+/* ─── world clocks ─── */
+.world-clocks {
+    position:relative;
+    z-index:1;
+    width:100%;
+    max-width:520px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    min-height:60px;
+}
+.world-clocks-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 4px 6px;
+}
+.world-clocks-header span {
+    font-size:0.7rem;
+    color:rgba(255,255,255,0.2);
+    letter-spacing:2px;
+    text-transform:uppercase;
+}
+.world-clocks-header .count-badge {
+    font-size:0.65rem;
+    padding:2px 10px;
+    border-radius:20px;
+    background:rgba(255,255,255,0.04);
+    color:rgba(255,255,255,0.3);
+    letter-spacing:0;
+    text-transform:none;
+}
+.world-clocks:empty::after {
+    content:'\u70B9\u64CA\u4E0A\u65B9\u6309\u9215\u65B0\u589E\u4E16\u754C\u6642\u9418';
+    display:block;
+    text-align:center;
+    color:rgba(255,255,255,0.12);
+    font-size:0.8rem;
+    padding:28px 0;
+    letter-spacing:1px;
+}
+.world-clock-item {
+    display:flex;
+    align-items:center;
+    background:rgba(18,18,30,0.6);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    border:1px solid rgba(255,255,255,0.04);
+    border-radius:18px;
+    padding:13px 16px;
+    transition:all 0.3s;
+    animation:fadeIn 0.35s ease;
+    cursor:default;
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+.world-clock-item:hover {
+    border-color:rgba(255,255,255,0.08);
+    background:rgba(22,22,36,0.7);
+}
+.world-clock-item .tod-icon {
+    font-size:1.1rem;
+    margin-right:12px;
+    opacity:0.5;
+    flex-shrink:0;
+    width:22px;
+    text-align:center;
+}
+.world-clock-item .city {
+    font-size:0.78rem;
+    font-weight:600;
+    color:rgba(255,255,255,0.4);
+    min-width:50px;
+    letter-spacing:1px;
+}
+.world-clock-item .time {
+    flex:1;
+    font-size:1.45rem;
+    font-weight:300;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:3px;
+    text-align:center;
+    color:rgba(255,255,255,0.85);
+    transition:color 0.3s;
+}
+.world-clock-item .date {
+    font-size:0.65rem;
+    color:#4dd0e1;
+    text-align:center;
+    min-width:66px;
+    line-height:1.3;
+    margin:0 4px;
+}
+.world-clock-item .date .wd {
+    display:block;
+    font-size:0.6rem;
+    color:#26c6da;
+}
+.world-clock-item .offset {
+    font-size:0.65rem;
+    color:rgba(255,255,255,0.2);
+    min-width:48px;
+    text-align:right;
+    margin-right:8px;
+    font-weight:500;
+}
+.world-clock-item .del-btn {
+    width:28px;
+    height:28px;
+    border:none;
+    border-radius:50%;
+    background:transparent;
+    color:rgba(255,255,255,0.15);
+    font-size:0.9rem;
+    cursor:pointer;
+    transition:all 0.3s;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    opacity:0;
+}
+.world-clock-item:hover .del-btn { opacity:1; }
+.world-clock-item .del-btn:hover {
+    background:rgba(255,60,60,0.12);
+    color:#ff4040;
+}
+
+/* ─── responsive ─── */
+@media (max-width:500px) {
+    body { padding:12px; }
+    .main-clock-wrap { padding:20px 18px 16px; border-radius:22px; }
+    #clock-digital { font-size:3rem; }
+    #clock-digital .seconds { font-size:1.5rem; }
+    .clock-area { min-height:110px; }
+    .analog-wrap { width:110px; height:110px; }
+    .world-clock-item { padding:11px 12px; flex-wrap:wrap; gap:4px; }
+    .world-clock-item .time { font-size:1.15rem; min-width:100%; order:-1; }
+    .world-clock-item .city { min-width:36px; font-size:0.7rem; }
+    .world-clock-item .date { min-width:56px; }
+    .world-clock-item .tod-icon { margin-right:8px; }
+    .world-clock-item .del-btn { opacity:1; }
+    .info-row { flex-direction:column; gap:8px; align-items:stretch; }
+    .info-actions { justify-content:center; }
+    .controls select { font-size:0.8rem; }
+    .controls .add-btn { padding:11px 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="dots" id="dots"></div>
+
+<h1>&#x1F310; 世界時鐘</h1>
+
+<div class="main-clock-wrap">
+    <div class="clock-area">
+        <div id="clock-digital">00:00:00</div>
+        <div class="analog-wrap" id="analogWrap">
+            <canvas id="analogCanvas" width="300" height="300"></canvas>
+        </div>
+    </div>
+    <div class="info-row">
+        <div id="date-display"></div>
+        <div class="info-actions">
+            <button id="formatBtn">24H</button>
+            <button id="toggleBtn">&#x1F504; 類比</button>
+        </div>
+    </div>
+</div>
+
+<div class="controls">
+    <div class="select-wrap">
+        <select id="citySelect"></select>
+        <span class="select-arrow">&#x25BE;</span>
+    </div>
+    <button class="add-btn" id="addBtn">+ 新增</button>
+</div>
+
+<div class="world-clocks-header">
+    <span>世界時鐘列表</span>
+    <span class="count-badge" id="countBadge">0 個</span>
+</div>
+<div class="world-clocks" id="worldClocks"></div>
+
+<script>
+(function() {
+    const CITY_GROUPS = [
+        { label: '東亞', cities: [
+            { name: '台北', tz: 'Asia/Taipei' },
+            { name: '東京', tz: 'Asia/Tokyo' },
+            { name: '首爾', tz: 'Asia/Seoul' },
+            { name: '上海', tz: 'Asia/Shanghai' },
+            { name: '香港', tz: 'Asia/Hong_Kong' },
+        ]},
+        { label: '東南亞／南亞', cities: [
+            { name: '新加坡', tz: 'Asia/Singapore' },
+            { name: '曼谷', tz: 'Asia/Bangkok' },
+            { name: '印度', tz: 'Asia/Kolkata' },
+        ]},
+        { label: '中東／歐洲', cities: [
+            { name: '杜拜', tz: 'Asia/Dubai' },
+            { name: '莫斯科', tz: 'Europe/Moscow' },
+            { name: '柏林', tz: 'Europe/Berlin' },
+            { name: '巴黎', tz: 'Europe/Paris' },
+            { name: '倫敦', tz: 'Europe/London' },
+        ]},
+        { label: '美洲', cities: [
+            { name: '紐約', tz: 'America/New_York' },
+            { name: '芝加哥', tz: 'America/Chicago' },
+            { name: '丹佛', tz: 'America/Denver' },
+            { name: '洛杉磯', tz: 'America/Los_Angeles' },
+            { name: '溫哥華', tz: 'America/Vancouver' },
+        ]},
+        { label: '大洋洲／太平洋', cities: [
+            { name: '雪梨', tz: 'Australia/Sydney' },
+            { name: '奧克蘭', tz: 'Pacific/Auckland' },
+            { name: '夏威夷', tz: 'Pacific/Honolulu' },
+        ]},
+    ];
+
+    const allCities = CITY_GROUPS.flatMap(g => g.cities);
+
+    const digitalEl = document.getElementById('clock-digital');
+    const dateEl = document.getElementById('date-display');
+    const analogWrap = document.getElementById('analogWrap');
+    const toggleBtn = document.getElementById('toggleBtn');
+    const formatBtn = document.getElementById('formatBtn');
+    const citySelect = document.getElementById('citySelect');
+    const addBtn = document.getElementById('addBtn');
+    const worldClocks = document.getElementById('worldClocks');
+    const countBadge = document.getElementById('countBadge');
+    const canvas = document.getElementById('analogCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let isAnalog = false;
+    let use24h = true;
+    let worldItems = [];
+    let nextId = 1;
+
+    // ─── floating dots ───
+    (function initDots() {
+        const container = document.getElementById('dots');
+        for (let i = 0; i < 30; i++) {
+            const dot = document.createElement('span');
+            dot.style.left = Math.random() * 100 + '%';
+            dot.style.width = dot.style.height = (1 + Math.random() * 2) + 'px';
+            dot.style.animationDuration = (15 + Math.random() * 25) + 's';
+            dot.style.animationDelay = (Math.random() * 20) + 's';
+            container.appendChild(dot);
+        }
+    })();
+
+    // ─── populate grouped select ───
+    CITY_GROUPS.forEach(g => {
+        const grp = document.createElement('optgroup');
+        grp.label = g.label;
+        g.cities.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.tz;
+            opt.textContent = c.name;
+            grp.appendChild(opt);
+        });
+        citySelect.appendChild(grp);
+    });
+
+    // ─── helpers ───
+    function fmt2(n) { return String(n).padStart(2, '0'); }
+
+    function getParts(tz) {
+        const now = new Date();
+        const opts = { timeZone: tz || undefined, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false };
+        const parts = new Intl.DateTimeFormat('en-CA', opts).formatToParts(now);
+        const y = parseInt(parts.find(p=>p.type==='year').value, 10);
+        const m = parseInt(parts.find(p=>p.type==='month').value, 10);
+        const d = parseInt(parts.find(p=>p.type==='day').value, 10);
+        const h = parseInt(parts.find(p=>p.type==='hour').value, 10);
+        const mi = parseInt(parts.find(p=>p.type==='minute').value, 10);
+        const s = parseInt(parts.find(p=>p.type==='second').value, 10);
+        return { y, m, d, h, mi, s };
+    }
+
+    function getUtcOffset(tz) {
+        const p = getParts(tz);
+        const wallUtc = Date.UTC(p.y, p.m-1, p.d, p.h, p.mi, p.s);
+        return (wallUtc - Date.now()) / (1000*60*60);
+    }
+
+    function formatOffset(offset) {
+        const rounded = Math.round(offset*10)/10;
+        const abs = Math.abs(rounded);
+        const sign = rounded >= 0 ? '+' : '-';
+        const h = Math.floor(abs);
+        const min = Math.round((abs - h) * 60);
+        if (min === 0) return `UTC${sign}${h}`;
+        return `UTC${sign}${h}:${fmt2(min)}`;
+    }
+
+    function getLocalParts() {
+        const now = new Date();
+        return { h: now.getHours(), m: now.getMinutes(), s: now.getSeconds() };
+    }
+
+    function formatDate(d) {
+        const y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate();
+        const wd = ['日','一','二','三','四','五','六'][d.getDay()];
+        return `${y} 年 ${m} 月 ${day} 日 星期${wd}`;
+    }
+
+    function formatTime24(h, m, s) {
+        return `${fmt2(h)}:${fmt2(m)}:${fmt2(s)}`;
+    }
+
+    function formatTime12(h, m, s) {
+        const ampm = h < 12 ? 'AM' : 'PM';
+        const h12 = h % 12 || 12;
+        return `${h12}:${fmt2(m)}:${fmt2(s)} ${ampm}`;
+    }
+
+    function formatTime(h, m, s, is12h) {
+        if (!is12h) return formatTime24(h, m, s);
+        return formatTime12(h, m, s);
+    }
+
+    function getTodIcon(h) {
+        if (h >= 5 && h < 12) return '\u{1F305}';  // sunrise
+        if (h >= 12 && h < 17) return '\u2600\uFE0F';  // sun
+        if (h >= 17 && h < 20) return '\u{1F306}';  // sunset
+        return '\u{1F319}';  // moon
+    }
+
+    // ─── analog draw ───
+    function drawAnalog(h, m, s) {
+        const r = 135, cx = 150, cy = 150;
+        ctx.clearRect(0, 0, 300, 300);
+
+        // subtle glow
+        const grad = ctx.createRadialGradient(cx, cy, 60, cx, cy, r+10);
+        grad.addColorStop(0, 'rgba(90,122,255,0.02)');
+        grad.addColorStop(1, 'rgba(90,122,255,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(cx, cy, r+10, 0, Math.PI*2); ctx.fill();
+
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 2; ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1.5;
+        for (let i=0; i<60; i++) {
+            const a = (i/60)*Math.PI*2 - Math.PI/2;
+            const inner = i%5===0 ? r-16 : r-8;
+            const outer = r-3;
+            ctx.beginPath();
+            ctx.moveTo(cx+Math.cos(a)*inner, cy+Math.sin(a)*inner);
+            ctx.lineTo(cx+Math.cos(a)*outer, cy+Math.sin(a)*outer);
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.font = 'bold 18px "Segoe UI",sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const nums=[12,3,6,9], ang=[0, Math.PI/2, Math.PI, 3*Math.PI/2];
+        nums.forEach((n,i)=>ctx.fillText(n, cx+Math.cos(ang[i])*(r-26), cy+Math.sin(ang[i])*(r-26)));
+
+        const hAngle = ((h%12)/12)*Math.PI*2 + (m/60)*(Math.PI*2/12) - Math.PI/2;
+        ctx.strokeStyle = 'rgba(200,210,255,0.7)';
+        ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.lineTo(cx+Math.cos(hAngle)*(r*0.5), cy+Math.sin(hAngle)*(r*0.5));
+        ctx.stroke();
+
+        const mAngle = (m/60)*Math.PI*2 + (s/60)*(Math.PI*2/60) - Math.PI/2;
+        ctx.strokeStyle = 'rgba(140,170,255,0.6)';
+        ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.lineTo(cx+Math.cos(mAngle)*(r*0.7), cy+Math.sin(mAngle)*(r*0.7));
+        ctx.stroke();
+
+        const sAngle = (s/60)*Math.PI*2 - Math.PI/2;
+        ctx.strokeStyle = '#ff4a6a';
+        ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(cx+Math.cos(sAngle+Math.PI)*(r*0.12), cy+Math.sin(sAngle+Math.PI)*(r*0.12));
+        ctx.lineTo(cx+Math.cos(sAngle)*(r*0.85), cy+Math.sin(sAngle)*(r*0.85));
+        ctx.stroke();
+
+        ctx.fillStyle = '#ff4a6a';
+        ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(200,210,255,0.5)';
+        ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, Math.PI*2); ctx.fill();
+    }
+
+    // ─── update main clock ───
+    function updateMainClock() {
+        const { h, m, s } = getLocalParts();
+        const now = new Date();
+        if (!isAnalog) {
+            digitalEl.innerHTML = use24h
+                ? `${fmt2(h)}:${fmt2(m)}<span class="seconds">:${fmt2(s)}</span>`
+                : `${h%12||12}:${fmt2(m)}<span class="seconds">:${fmt2(s)} ${h<12?'AM':'PM'}</span>`;
+        }
+        dateEl.textContent = formatDate(now);
+        if (isAnalog) drawAnalog(h, m, s);
+    }
+
+    // ─── update world clocks ───
+    function updateWorldClocks() {
+        worldItems.forEach(item => {
+            const el = document.getElementById(`wc-${item.id}`);
+            if (!el) return;
+            const p = getParts(item.tz);
+            el.querySelector('.time').textContent = formatTime(p.h, p.mi, p.s, !use24h);
+            const dt = new Date(p.y, p.m-1, p.d);
+            const wd = ['日','一','二','三','四','五','六'][dt.getDay()];
+            el.querySelector('.date').innerHTML = `${p.m}/${p.d}<span class="wd">週${wd}</span>`;
+            el.querySelector('.offset').textContent = formatOffset(getUtcOffset(item.tz));
+            el.querySelector('.tod-icon').textContent = getTodIcon(p.h);
+        });
+    }
+
+    function tick() {
+        updateMainClock();
+        updateWorldClocks();
+    }
+
+    function updateBadge() {
+        countBadge.textContent = `${worldItems.length} 個`;
+    }
+
+    // ─── save / load localStorage ───
+    function saveClocks() {
+        try { localStorage.setItem('wc_items', JSON.stringify(worldItems.map(w=>({tz:w.tz})))); } catch(e){}
+    }
+    function loadClocks() {
+        try {
+            const raw = localStorage.getItem('wc_items');
+            if (!raw) return;
+            const arr = JSON.parse(raw);
+            arr.forEach(({tz}) => {
+                const city = allCities.find(c=>c.tz===tz);
+                if (!city) return;
+                const id = nextId++;
+                worldItems.push({ id, tz, cityName: city.name });
+                const div = createClockElement(id, city.name);
+                worldClocks.appendChild(div);
+            });
+            updateBadge();
+            updateWorldClocks();
+        } catch(e){}
+    }
+
+    function createClockElement(id, cityName) {
+        const div = document.createElement('div');
+        div.className = 'world-clock-item';
+        div.id = `wc-${id}`;
+        div.innerHTML = `
+            <span class="tod-icon">&#x1F319;</span>
+            <span class="city">${cityName}</span>
+            <span class="time">--:--:--</span>
+            <span class="date">--/--</span>
+            <span class="offset">--</span>
+            <button class="del-btn" data-id="${id}" title="移除">&#x2715;</button>
+        `;
+        div.querySelector('.del-btn').addEventListener('click', (e) => {
+            const delId = parseInt(e.target.dataset.id, 10);
+            worldItems = worldItems.filter(w => w.id !== delId);
+            const el = document.getElementById(`wc-${delId}`);
+            if (el) { el.style.animation = 'fadeIn 0.25s ease reverse'; setTimeout(()=>el.remove(), 260); }
+            if (worldItems.length === 0) worldClocks.innerHTML = '';
+            updateBadge();
+            saveClocks();
+        });
+        return div;
+    }
+
+    // ─── toggle analog ───
+    toggleBtn.addEventListener('click', () => {
+        isAnalog = !isAnalog;
+        if (isAnalog) {
+            digitalEl.style.display = 'none';
+            analogWrap.style.display = 'block';
+            toggleBtn.textContent = '\u{1F504} 數位';
+        } else {
+            digitalEl.style.display = '';
+            analogWrap.style.display = 'none';
+            toggleBtn.textContent = '\u{1F504} 類比';
+        }
+        tick();
+    });
+
+    // ─── toggle 12h/24h ───
+    formatBtn.addEventListener('click', () => {
+        use24h = !use24h;
+        formatBtn.textContent = use24h ? '24H' : '12H';
+        formatBtn.classList.toggle('active-format', !use24h);
+        tick();
+    });
+
+    // ─── add city ───
+    function addCity() {
+        const tz = citySelect.value;
+        const city = allCities.find(c => c.tz === tz);
+        if (!city) return;
+        if (worldItems.some(w => w.tz === tz)) return;
+
+        const id = nextId++;
+        worldItems.push({ id, tz, cityName: city.name });
+
+        const div = createClockElement(id, city.name);
+        worldClocks.appendChild(div);
+        updateWorldClocks();
+        updateBadge();
+        saveClocks();
+        div.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    addBtn.addEventListener('click', addCity);
+    citySelect.addEventListener('keydown', (e) => { if (e.key === 'Enter') addCity(); });
+
+    // ─── init ───
+    loadClocks();
+    setInterval(tick, 1000);
+    tick();
+    updateBadge();
+})();
+</script>
+</body>
+</html>
