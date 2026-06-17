@@ -1,5 +1,15 @@
 [
   {
+    "path": "apps/50.gemini.html",
+    "title": "五十音練習_gemma-4-26b-a4b",
+    "description": ""
+  },
+  {
+    "path": "apps/50.qwen.html",
+    "title": "五十音練習_Qwen3.6-35b-a3b",
+    "description": ""
+  },
+  {
     "path": "apps/animal-garden.claude.html",
     "title": "秘密花園 🌿",
     "description": "點擊可以隨機生成動物，可以蒐集動物"
