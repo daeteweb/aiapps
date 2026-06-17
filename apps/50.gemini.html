@@ -1,0 +1,425 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>五十音練習_gemma-4-26b-a4b</title>
+    <style>
+        :root {
+            --bg-color: #f5f7fa;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --primary-color: #4a90e2;
+            --error-color: #ff4d4d;
+            --border-color: #dddddd;
+            --progress-bg: #eee;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-color: #f0f0f0;
+            --primary-color: #66b3ff;
+            --border-color: #444444;
+            --progress-bg: #444444;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* 常駐控制面板 */
+        .header {
+            width: 100%;
+            max-width: 400px;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+
+        .settings, .theme-toggle-container {
+            background: var(--card-bg);
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+        }
+
+        .settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .settings label {
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .settings input {
+            margin-right: 8px;
+        }
+
+        .theme-toggle-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        /* 切換開關樣式 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px; width: 14px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--primary-color); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* 主遊戲區域 */
+        .container {
+            width: 90%;
+            max-width: 400px;
+            background: var(--card-bg);
+            padding: 2rem 1.5rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+            position: relative;
+        }
+
+        #character-display {
+            font-size: 7rem;
+            font-weight: bold;
+            height: 160px;
+            line-height: 160px;
+            margin: 0 auto;
+        }
+
+        input[type="text"] {
+            width: 85%;
+            padding: 12px;
+            font-size: 1.8rem;
+            border: 3px solid var(--border-color);
+            border-radius: 12px;
+            text-align: center;
+            outline: none;
+            background: transparent;
+            color: var(--text-color);
+        }
+
+        /* 進度條 */
+        .progress-container {
+            width: 100%;
+            height: 10px;
+            background: var(--progress-bg);
+            border-radius: 5px;
+            margin: 20px 0 5px 0;
+            overflow: hidden;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--primary-color);
+            transition: width 0.3s ease;
+        }
+
+        .status-text {
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        /* 統計畫面 */
+        #stats-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--card-bg);
+            border-radius: 20px;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        #stats-screen h2 { font-size: 1.5rem; }
+        .error-count-text { font-size: 3rem; color: var(--error-color); margin: 10px 0; }
+
+        button {
+            padding: 12px 30px;
+            font-size: 1rem;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover { opacity: 0.9; }
+
+        /* 動畫 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-15px); }
+            75% { transform: translateX(15px); }
+        }
+        .shake-effect { animation: shake 0.3s ease-in-out; }
+
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="settings">
+        <label><input type="checkbox" class="type-opt" value="hiragana" checked> 平假名</label>
+        <label><input type="checkbox" class="type-opt" value="katakana" checked> 片假名</label>
+        <label><input type="checkbox" class="type-opt" value="dakuten"> 濁音</label>
+        <label><input type="checkbox" class="type-opt" value="yoon"> 拗音</label>
+    </div>
+    <div class="theme-toggle-container">
+        <span>深色模式</span>
+        <label class="switch">
+            <input type="checkbox" id="theme-switch">
+            <span class="slider"></span>
+        </label>
+    </div>
+</div>
+
+<div class="container">
+    <!-- 遊戲區域 -->
+    <div id="game-area">
+        <div id="character-display">あ</div>
+        <input type="text" id="romaji-input" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="...">
+        
+        <div class="progress-container">
+            <div id="progress-bar"></div>
+        </div>
+        <div class="status-text" id="progress-text">0 / 0</div>
+    </div>
+
+    <!-- 統計區域 -->
+    <div id="stats-screen">
+        <h2>練習結束！</h2>
+        <p>本次錯誤次數</p>
+        <div class="error-count-text" id="total-errors">0</div>
+        <button id="restart-btn">重新開始 (Space/Enter)</button>
+    </div>
+</div>
+
+<script>
+/** 資料庫 **/
+const kanaData = {
+    hiragana: [
+        {c:'あ', r:'a'}, {c:'い', r:'i'}, {c:'う', r:'u'}, {c:'え', r:'e'}, {c:'お', r:'o'},
+        {c:'か', r:'ka'}, {c:'き', r:'ki'}, {c:'く', r:'ku'}, {c:'け', r:'ke'}, {c:'こ', r:'ko'},
+        {c:'さ', r:'sa'}, {c:'し', r:'shi'}, {c:'す', r:'su'}, {c:'せ', r:'se'}, {c:'そ', r:'so'},
+        {c:'た', r:'ta'}, {c:'ち', r:'chi'}, {c:'つ', r:'tsu'}, {c:'て', r:'te'}, {c:'と', r:'to'},
+        {c:'な', r:'na'}, {c:'に', r:'ni'}, {c:'ぬ', r:'nu'}, {c:'ね', r:'ne'}, {c:'の', r:'no'},
+        {c:'は', r:'ha'}, {c:'ひ', r:'hi'}, {c:'ふ', r:'fu'}, {c:'へ', r:'he'}, {c:'ほ', r:'ho'},
+        {c:'ま', r:'ma'}, {c:'み', r:'mi'}, {c:'む', r:'mu'}, {c:'め', r:'me'}, {c:'も', r:'mo'},
+        {c:'や', r:'ya'}, {c:'ゆ', r:'yu'}, {c:'よ', r:'yo'},
+        {c:'ら', r:'ra'}, {c:'り', r:'ri'}, {c:'る', r:'ru'}, {c:'れ', r:'re'}, {c:'ろ', r:'ro'},
+        {c:'わ', r:'wa'}, {c:'を', r:'wo'}, {c:'ん', r:'n'}
+    ],
+    katakana: [
+        {c:'ア', r:'a'}, {c:'イ', r:'i'}, {c:'ウ', r:'u'}, {c:'エ', r:'e'}, {c:'オ', r:'o'},
+        {c:'カ', r:'ka'}, {c:'キ', r:'ki'}, {c:'ク', r:'ku'}, {c:'ケ', r:'ke'}, {c:'コ', r:'ko'},
+        {c:'サ', r:'sa'}, {c:'シ', r:'shi'}, {c:'ス', r:'su'}, {c:'セ', r:'se'}, {c:'ソ', r:'so'},
+        {c:'タ', r:'ta'}, {c:'チ', r:'chi'}, {c:'ツ', r:'tsu'}, {c:'テ', r:'te'}, {c:'ト', r:'to'},
+        {c:'ナ', r:'na'}, {c:'ニ', r:'ni'}, {c:'ヌ', r:'nu'}, {c:'ネ', r:'ne'}, {c:'ノ', r:'no'},
+        {c:'ハ', r:'ha'}, {c:'ヒ', r:'hi'}, {c:'フ', r:'fu'}, {c:'ヘ', r:'he'}, {c:'ホ', r:'ho'},
+        {c:'マ', r:'ma'}, {c:'ミ', r:'mi'}, {c:'ム', r:'mu'}, {c:'メ', r:'me'}, {c:'モ', r:'mo'},
+        {c:'ヤ', r:'ya'}, {c:'ユ', r:'yu'}, {c:'ヨ', r:'yo'},
+        {c:'ラ', r:'ra'}, {c:'リ', r:'ri'}, {c:'ル', r:'ru'}, {c:'レ', r:'re'}, {c:'ロ', r:'ro'},
+        {c:'ワ', r:'wa'}, {c:'ヲ', r:'wo'}, {c:'ン', r:'n'}
+    ],
+    dakuten: [
+        {c:'ガ', r:'ga'}, {c:'ギ', r:'gi'}, {c:'グ', r:'gu'}, {c:'ゲ', r:'ge'}, {c:'ゴ', r:'go'},
+        {c:'ザ', r:'za'}, {c:'ジ', r:'ji'}, {c:'ズ', r:'zu'}, {c:'ゼ', r:'ze'}, {c:'ゾ', r:'zo'},
+        {c:'ダ', r:'da'}, {c:'ヂ', r:'ji'}, {c:'ヅ', r:'zu'}, {c:'デ', r:'de'}, {c:'ド', r:'do'},
+        {c:'バ', r:'ba'}, {c:'ビ', r:'bi'}, {c:'ブ', r:'bu'}, {c:'ベ', r:'be'}, {c:'ボ', r:'bo'},
+        {c:'パ', r:'pa'}, {c:'ピ', r:'pi'}, {c:'プ', r:'pu'}, {c:'ペ', r:'pe'}, {c:'ポ', r:'po'}
+    ],
+    yoon: [
+        {c:'きゃ', r:'kya'}, {c:'きゅ', r:'kyu'}, {c:'きょ', r:'kyo'},
+        {c:'しゃ', r:'sha'}, {c:'しゅ', r:'shu'}, {c:'しょ', r:'sho'},
+        {c:'ちゃ', r:'cha'}, {c:'ちゅ', r:'chu'}, {c:'ちょ', r:'cho'},
+        {c:'にゃ', r:'nya'}, {c:'にゅ', r:'nyu'}, {c:'にょ', r:'nyo'},
+        {c:'ひゃ', r:'hya'}, {c:'ひゅ', r:'hyu'}, {c:'ひょ', r:'hyo'},
+        {c:'みゃ', r:'mya'}, {c:'みゅ', r:'myu'}, {c:'みょ', r:'myo'},
+        {c:'りゃ', r:'rya'}, {c:'りゅ', r:'ryu'}, {c:'りょ', r:'ryo'},
+        {c:'ぎゃ', r:'gya'}, {c:'ぎゅ', r:'gyu'}, {c:'ぎょ', r:'gyo'},
+        {c:'じゃ', r:'ja'}, {c:'じゅ', r:'ju'}, {c:'じょ', r:'jo'},
+        {c:'びゃ', r:'bya'}, {c:'びゅ', r:'byu'}, {c:'びょ', r:'byo'}
+    ]
+};
+
+/** 變數 **/
+let currentPool = [];
+let currentIndex = 0;
+let errorCount = 0;
+let isGameActive = false;
+
+// DOM Elements
+const displayEl = document.getElementById('character-display');
+const inputEl = document.getElementById('romaji-input');
+const progressTextEl = document.getElementById('progress-text');
+const progressBarEl = document.getElementById('progress-bar');
+const statsScreen = document.getElementById('stats-screen');
+const totalErrorsEl = document.getElementById('total-errors');
+const restartBtn = document.getElementById('restart-btn');
+const themeSwitch = document.getElementById('theme-switch');
+const typeOptions = document.querySelectorAll('.type-opt');
+
+/** 邏輯功能 **/
+
+// 初始化遊戲/重新載入題庫
+function initGame() {
+    currentPool = [];
+    errorCount = 0;
+    currentIndex = 0;
+    isGameActive = true;
+
+    // 收集所有勾選的類型
+    typeOptions.forEach(opt => {
+        if (opt.checked) {
+            currentPool = currentPool.concat(kanaData[opt.value]);
+        }
+    });
+
+    if (currentPool.length === 0) {
+        alert("請至少選擇一種練習類型！");
+        return;
+    }
+
+    // 洗牌
+    shuffle(currentPool);
+    
+    statsScreen.style.display = 'none';
+    inputEl.disabled = false;
+    renderQuestion();
+}
+
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
+
+function renderQuestion() {
+    if (currentIndex < currentPool.length) {
+        isGameActive = true;
+        const item = currentPool[currentIndex];
+        displayEl.innerText = item.c;
+        inputEl.value = '';
+        inputEl.focus();
+        
+        // 更新進度條與文字
+        progressTextEl.innerText = `${currentIndex + 1} / ${currentPool.length}`;
+        const percent = (currentIndex / currentPool.length) * 100;
+        progressBarEl.style.width = `${percent}%`;
+    } else {
+        // 一輪結束，顯示統計畫面
+        showStats();
+    }
+}
+
+function showStats() {
+    isGameActive = false;
+    inputEl.disabled = true;
+    totalErrorsEl.innerText = errorCount;
+    statsScreen.style.display = 'flex';
+}
+
+// 處理輸入錯誤的震動效果
+function triggerError() {
+    errorCount++;
+    displayEl.classList.remove('shake-effect');
+    void displayEl.offsetWidth; // 強制重繪以重新觸發動畫
+    displayEl.classList.add('shake-effect');
+    inputEl.value = '';
+}
+
+// 輸入監聽器
+inputEl.addEventListener('input', (e) => {
+    if (!isGameActive) return;
+
+    const val = e.target.value.toLowerCase().trim();
+    const target = currentPool[currentIndex].r;
+
+    // 如果輸入與目標完全吻合
+    if (val === target) {
+        currentIndex++;
+        renderQuestion();
+    } 
+    // 如果目前输入的內容不符合正確拼音的「前綴」，表示打錯了，觸發震動
+    else if (val.length > 0 && !target.startsWith(val)) {
+        triggerError();
+    }
+});
+
+/** 事件監聽 **/
+
+// 設定項改變時重新載入
+typeOptions.forEach(opt => {
+    opt.addEventListener('change', initGame);
+});
+
+// 重啟按鈕
+restartBtn.addEventListener('click', initGame);
+
+// 暗黑模式切換
+themeSwitch.addEventListener('change', () => {
+    document.body.setAttribute('data-theme', themeSwitch.checked ? 'dark' : 'light');
+});
+
+// 鍵盤快捷鍵 (Space / Enter)
+window.addEventListener('keydown', (e) => {
+    if (!isGameActive && statsScreen.style.display === 'flex') {
+        if (e.code === 'Space' || e.code === 'Enter') {
+            initGame();
+        }
+    }
+});
+
+// 預設啟動一次遊戲 (初始化)
+window.onload = () => {
+    // 確保手機點擊輸入框時不會讓鍵盤縮回去，我們在 input 事件後也會 focus
+    inputEl.focus();
+};
+
+</script>
+
+</body>
+</html>

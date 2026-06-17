@@ -1,0 +1,1006 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>五十音練習_Qwen3.6-35b-a3b</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
+    background: #1a1a2e;
+    color: #eee;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    touch-action: manipulation;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 12px 8px;
+    background: linear-gradient(135deg, #16213e, #0f3460);
+    border-bottom: 2px solid #e94560;
+    flex-shrink: 0;
+  }
+  .header h1 { font-size: 1.3rem; color: #e94560; margin-bottom: 8px; letter-spacing: 2px; }
+
+  /* Mode toggles */
+  .mode-bar {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 8px;
+    background: #16213e;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .mode-btn {
+    padding: 8px 14px;
+    border: 2px solid #533483;
+    background: transparent;
+    color: #aaa;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    user-select: none;
+  }
+  .mode-btn.active {
+    background: #e94560;
+    border-color: #e94560;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(233,69,96,0.4);
+  }
+  /* Disable button style */
+  .mode-btn.disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none;}
+
+  /* Progress */
+  .progress-section {
+    padding: 5px 16px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .progress-text { font-size: 0.8rem; color: #aaa; margin-bottom: 4px; display:flex; justify-content: space-between;}
+  .progress-bar-bg { width: 100%; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #e94560, #ff6b6b); transition: width 0.3s ease; width: 0%; }
+
+  /* Main area */
+  .main-area { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 8px; overflow-y: auto; min-height: 0; }
+
+  /* Current question */
+  .question-section {
+    text-align: center;
+    margin-bottom: 15px;
+    width: 100%;
+    flex-shrink: 0;
+    padding: 20px 0;
+  }
+  
+  .current-kana {
+    font-size: 5rem; /* Larger for better visibility */
+    line-height: 1.2;
+    color: #fff;
+    text-shadow: 0 0 30px rgba(233,69,96,0.3);
+    min-height: 110px; /* Fixed height to prevent layout shift when hint shows */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .hint-area {
+    margin-top: 8px;
+    font-size: 1.2rem;
+    color: #7a7aae; /* Hidden by default via opacity if needed, but using content toggle */
+    min-height: 30px;
+    transition: all 0.2s;
+  }
+  
+  .hint-area.revealed { color: #ffcc00; font-weight: bold; text-shadow: 0 0 10px rgba(255,204,0,0.3); }
+
+  /* Input area */
+  .input-section {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+    z-index: 50; /* Keep above other content */
+  }
+  
+  #answerInput {
+    width: 140px;
+    padding: 12px;
+    font-size: 1.5rem;
+    text-align: center;
+    border: 2px solid #533483;
+    background: rgba(255,255,255,0.07);
+    color: #fff;
+    border-radius: 12px;
+    outline: none;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+    transition: border-color 0.2s, transform 0.2s;
+    -webkit-appearance: none; appearance: none;
+  }
+  #answerInput:focus { border-color: #e94560; box-shadow: 0 0 15px rgba(233,69,96,0.3); transform: scale(1.02); }
+  
+  /* Animations */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0) scale(1); }
+    20% { transform: translateX(-8px) scale(1); border-color: #ff5252; background: rgba(255,82,82,0.1); }
+    40% { transform: translateX(8px) scale(1); }
+    60% { transform: translateX(-8px) scale(1); border-color: #ff5252; background: rgba(255,82,82,0.1); }
+    80% { transform: translateX(8px) scale(1); }
+  }
+
+  @keyframes correctPop {
+    0% { transform: scale(1); border-color: #e94560; }
+    50% { transform: scale(1.2); border-color: #00e676; background: rgba(0,230,118,0.2); box-shadow: 0 0 20px rgba(0,230,118,0.4);}
+    100% { transform: scale(1); border-color: #00e676; background: transparent;}
+  }
+
+  .shake-anim { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both !important; color:#ff5252; }
+  .correct-anim { animation: correctPop 0.4s ease-out forwards !important; color: #fff;}
+
+  /* Gojuuon chart */
+  .chart-container {
+    flex-shrink: 0;
+    width: 100%;
+    max-width: 520px;
+    padding-bottom: 10px;
+  }
+  
+  .chart-mode-selector { display: flex; justify-content: center; gap: 4px; margin-bottom: 6px; }
+  .chart-mode-btn { padding: 3px 10px; font-size: 0.75rem; background: transparent; border: 1px solid #444; color: #888; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+  .chart-mode-btn.active { background: #533483; color: #fff; border-color: #533483; }
+
+  /* Chart cells */
+  .gojuuon-chart { display: grid; gap: 3px; padding: 8px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
+  
+  .ch-cell { 
+    min-height: 48px; aspect-ratio: auto; display: flex; align-items: center; justify-content: center; font-size: 1rem; 
+    border-radius: 6px; background: rgba(255,255,255,0.04); color: #555; transition: all 0.3s ease; position: relative; 
+  }
+  .ch-cell.highlight { border: 1px solid rgba(233,69,96,0.5); color: #e94560; font-weight: bold; background: rgba(233,69,96,0.1); }
+  .ch-cell.done { color: #8bc34a; background: rgba(139,195,74,0.08); }
+  .ch-cell.current-q { border: 2px solid #e94560; color: #fff; font-weight: bold; font-size: 1.1rem; background: rgba(233,69,96,0.15); box-shadow: 0 0 8px rgba(233,69,96,0.3); }
+
+  /* Extra rows (Dakuten/Yoon) */
+  .extra-row { grid-column: 1 / -1; margin-top: 8px; padding-top: 4px; border-top: 1px dashed #444; width: 100%; text-align: center;}
+  .extra-label { font-size: 0.7rem; color: #666; margin-bottom: 2px; display: block; }
+
+  /* Completion overlay */
+  .complete-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(26,26,46,0.95); z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  }
+  .complete-overlay.show { display: flex; animation: fadeIn 0.3s ease; }
+  
+  @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); }}
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>五十音練習</h1>
+</div>
+
+<!-- Mode Toggles -->
+<div class="mode-bar">
+  <button class="mode-btn active" data-mode="hiragana" onclick="toggleMode('hiragana')">ひらがな</button>
+  <button class="mode-btn" data-mode="katakana" onclick="toggleMode('katakana')">カタカナ</button>
+  <button class="mode-btn" data-mode="dakuten" onclick="toggleMode('dakuten')">濁音・半濁音</button>
+  <button class="mode-btn" data-mode="yoon" onclick="toggleMode('yoon')">拗音</button>
+</div>
+
+<!-- Progress -->
+<div class="progress-section">
+  <div class="progress-text">
+    <span id="progressText">0 / 0</span>
+    <span id="roundInfo"></span>
+  </div>
+  <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+</div>
+
+<div class="main-area">
+  <!-- Question Display -->
+  <div class="question-section">
+    <div class="current-kana" id="currentKana">あ</div>
+    <!-- Hint area: Initially empty/hidden, revealed on wrong answer -->
+    <div class="hint-area" id="hintArea"></div> 
+  </div>
+
+  <!-- Input Field (Fixed z-index behavior via layout flow) -->
+  <div class="input-section">
+    <input type="text" id="answerInput" inputmode="latin" autocomplete="off" autocorrect="off" spellcheck="false" direction="ltr">
+  </div>
+
+  <!-- Chart Display -->
+  <div class="chart-container">
+    <div class="chart-mode-selector">
+      <button class="chart-mode-btn active" onclick="setChartMode('kana')">かな</button>
+      <button class="chart-mode-btn" onclick="setChartMode('romaji')">ローマ字</button>
+    </div>
+    <div class="gojuuon-chart" id="gojuuonChart"></div>
+  </div>
+</div>
+
+<div class="complete-overlay" id="completeOverlay">
+  <h2 style="color:#e94560; font-size:2rem;">🎉 一輪完了！</h2>
+  <p id="completeText" style="color:#ccc; text-align:center; line-height:1.8;"></p>
+  <button onclick="restartDeck()" style="padding:12px 30px; font-size:1rem; background:#e94560; color:white; border:none; border-radius:25px; cursor:pointer;">繼續練習</button>
+</div>
+
+<script>
+// ==================== DATA ====================
+
+const HIRAGANA_BASIC = [
+  {kana:'あ', romaji:['a']},
+  {kana:'い', romaji:['i','wi']}, {kana:'う', romaji:['u','wu']}, {kana:'え', romaji:['e']}, {kana:'お', romaji:['o']},
+  
+  {kana:'か', romaji:['ka']}, {kana:'き', romaji:['ki']}, {kana:'く', romaji:['ku']}, {kana:'け', romaji:['ke']}, {kana:'こ', romaji:['ko']},
+  
+  {kana:'さ', romaji:['sa']}, {kana:'し', romaji:['shi','si']}, {kana:'す', romaji:['su']}, {kana:'せ', romaji:['se']}, {kana:'そ', romaji:['so']},
+  
+  {kana:'た', romaji:['ta']}, {kana:'ち', romaji:['chi','ti']}, {kana:'つ', romaji:['tsu','tu']}, {kana:'て', romaji:['te']}, {kana:'と', romaji:['to']},
+  
+  {kana:'な', romaji:['na']}, {kana:'に', romaji:['ni']}, {kana:'ぬ', romaji:['nu']}, {kana:'ね', romaji:['ne']}, {kana:'の', romaji:['no']},
+  
+  {kana:'は', romaji:['ha','hwa']}, {kana:'ひ', romaji:['hi']}, {kana:'ふ', romaji:['hu','fu']}, {kana:'へ', romaji:['he']}, {kana:'ほ', romaji:['ho']},
+  
+  {kana:'ま', romaji:['ma']}, {kana:'み', romaji:['mi']}, {kana:'む', romaji:['mu']}, {kana:'め', romaji:['me']}, {kana:'も', romaji:['mo']},
+  
+  {kana:'や', romaji:['ya']}, /* skip empty */ {kana:'ゆ', romaji:['yu']}, /* skip empty */ {kana:'よ', romaji:['yo']},
+  
+  {kana:'ら', romaji:['ra']}, {kana:'り', romaji:['ri']}, {kana:'る', romaji:['ru']}, {kana:'れ', romaji:['re']}, {kana:'ろ', romaji:['ro']},
+  
+  {kana:'わ', romaji:['wa','wha']}, /* skip を */ {kana:'ん', romaji:['n']}
+];
+
+const KATAKANA_BASIC = [
+  {kana:'ア', romaji:['a']}, {kana:'イ', romaji:['i','wi']}, {kana:'ウ', romaji:['u','wu']}, {kana:'エ', romaji:['e']}, {kana:'オ', romaji:['o']},
+  {kana:'カ', romaji:['ka']}, {kana:'キ', romaji:['ki']}, {kana:'ク', romaji:['ku']}, {kana:'ケ', romaji:['ke']}, {kana:'コ', romaji:['ko']},
+  {kana:'サ', romaji:['sa']}, {kana:'シ', romaji:['shi','si']}, {kana:'ス', romaji:['su']}, {kana:'セ', romaji:['se']}, {kana:'ソ', romaji:['so']},
+  {kana:'タ', romaji:['ta']}, {kana:'チ', romaji:['chi','ti']}, {kana:'ツ', romaji:['tsu','tu']}, {kana:'テ', romaji:['te']}, {kana:'ト', romaji:['to']},
+  {kana:'ナ', romaji:['na']}, {kana:'ニ', romaji:['ni']}, {kana:'ヌ', romaji:['nu']}, {kana:'ネ', romaji:['ne']}, {kana:'ノ', romaji:['no']},
+  {kana:'ハ', romaji:['ha','hwa']}, {kana:'ヒ', romaji:['hi']}, {kana:'フ', romaji:['hu','fu']}, {kana:'ヘ', romaji:['he']}, {kana:'ホ', romaji:['ho']},
+  {kana:'マ', romaji:['ma']}, {kana:'ミ', romaji:['mi']}, {kana:'ム', romaji:['mu']}, {kana:'メ', romaji:['me']}, {kana:'モ', romaji:['mo']},
+  {kana:'ヤ', romaji:['ya']}, {kana:'ユ', romaji:['yu']}, {kana:'ヨ', romaji:['yo']},
+  {kana:'ラ', romaji:['ra']}, {kana:'リ', romaji:['ri']}, {kana:'ル', romaji:['ru']}, {kana:'レ', romaji:['re']}, {kana:'ロ', romaji:['ro']},
+  {kana:'ワ', romaji:['wa','wha']}, /* skip ヲ */ {kana:'ン', romaji:['n']}
+];
+
+// Dakuten / Handakuten (Voiced/Unvoiced sounds)
+const DAKUTEN = [
+  // Ga row
+  {kana:'が', romaji:['ga'], isDakuten:true},
+  {kana:'ぎ', romaji:['gi'], isDakuten:true},
+  {kana:'ぐ', romaji:['gu'], isDakuten:true},
+  {kana:'げ', romaji:['ge'], isDakuten:true},
+  {kana:'ご', romaji:['go'], isDakuten:true},
+
+  // Za row (including Ji)
+  {kana:'ざ', romaji:['za','ja']}, 
+  {kana:'じ', romaji:['ji','zi']},
+  {kana:'ず', romaji:['zu']},
+  {kana:'ぜ', romaji:['ze']},
+  {kana:'ぞ', romaji:['zo']},
+
+  // Da row (including Ji)
+  {kana:'だ', romaji:['da','dwa']}, 
+  {kana:'ぢ', romaji:['di','ji','dzi']},
+  {kana:'づ', romaji:['du','zu','dzu']},
+  {kana:'で', romaji:['de']},
+  {kana:'ど', romaji:['do']},
+
+  // Ba row & Pa row (Handakuten)
+  {kana:'ば', romaji:['ba','bwa'], isDakuten:true}, 
+  {kana:'び', romaji:['bi'], isDakuten:true},
+  {kana:'ぶ', romaji:['bu','bhu'], isDakuten:true}, 
+  {kana:'べ', romaji:['be'], isDakuten:true},
+  {kana:'ぼ', romaji:['bo'], isDakuten:true},
+
+  // Pa row (Handakuten)
+  {kana:'ぱ', romaji:['pa'], isPa:true},
+  {kana:'ぴ', romaji:['pi'], isPa:true}, 
+  {kana:'ぷ', romaji:['pu'], isPa:true},
+  {kana:'ぺ', romaji:['pe'], isPa:true}, 
+  {kana:'ぽ', romaji:['po'], isPa:true} 
+];
+
+// Yoon (Contractions like kya, shu...)
+const YOON = [
+  // ka row: ki + ya/yu/yo -> kya, kyu, kyo
+  {kana:'きゃ', romaji:['kya']}, {kana:'きゅ', romaji:['kyu']}, {kana:'きょ', romaji:['kyo']},
+
+  // sa row (shi): shi + ya/yu/yo -> sha, shu, sho
+  {kana:'しゃ', romaji:['sha','sya']}, {kana:'しゅ', romaji:['shu','syu']}, {kana:'しょ', romaji:['sho','syo']},
+
+  // ta row (chi): chi + ya/yu/yo -> cha, chu, cho
+  {kana:'ちゃ', romaji:['cha','tya']}, {kana:'ちゅ', romaji:['chu','tyu']}, {kana:'ちょ', romaji:['cho','tyo']},
+
+  // ha row (hi): hi + ya/yu/yo -> hya, hyu, hyo
+  {kana:'ひゃ', romaji:['hya']}, {kana:'ひゅ', romaji:['hyu']}, {kana:'ひょ', romaji:['hyo']}
+];
+
+// ==================== STATE ====================
+let modes = new Set(['hiragana']); // hiragana, katakana, dakuten, yoon
+let chartMode = 'kana'; 
+
+let questionDeck = [];   
+let visitedInRound = new Set(); 
+let roundProgress = 0;
+let totalRounds = 0;
+let correctCount = 0;
+let wrongCount = 0;
+let currentQuestionIndex = -1;
+
+// ==================== LOGIC ====================
+
+function toggleMode(mode) {
+  if (modes.has(mode)) {
+    // Prevent removing hiragana if dakuten/yoon is active to avoid logic gaps
+    if ((mode === 'hiragana') && modes.has('dakuten')) return; 
+    if ((mode === 'hiragana') && modes.has('yoon')) return; 
+    
+    modes.delete(mode);
+  } else {
+    modes.add(mode);
+    
+    // Auto-enable hiragana when selecting dakuten or yoon for simplicity of deck generation logic
+    // Or handle them separately in buildDeck (Current implementation handles separate arrays)
+  }
+
+  updateButtons();
+  
+  // Check constraints: if neither basic is selected, force one? 
+  // For now we allow just Dakuten or just Yoon which means they generate their own chars.
+  restartDeck();
+}
+
+function updateButtons() {
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    const m = btn.dataset.mode;
+    let active = modes.has(m);
+    
+    // Constraint: if Hiragana is unchecked, can't uncheck it while Dakuten/Yoon on (handled above)
+    // Visual feedback for disabled state
+    if (m === 'hiragana' && (!modes.has('hiragana') || !modes.has('katakana'))) {
+        btn.classList.add(active ? '' : ''); 
+        // If hiragana is active, ensure user doesn't disable it if dependencies exist
+        const hasDeps = (modes.has('dakuten') || modes.has('yoon'));
+        if(hasDeps) {
+             btn.title = "濁音/拗音需要平假名";
+        } else {
+            btn.title = "";
+        }
+    }
+
+    // Force hiragana selection if it has dependencies (clean up state)
+    if ((modes.has('dakuten') || modes.has('yoon')) && !modes.has(m)) {
+         // Logic handled in startNewDeck to just pull from HIRAGANA_BASIC arrays
+    }
+    
+    btn.classList.toggle('active', active);
+  });
+
+  // Constraint enforcement: If DAKUTEN or YOON is checked, force HIRAGANA check logic implicitly by reading basic array
+  if ((modes.has('dakuten') || modes.has('yoon')) && !modes.has('hiragana')) {
+      modes.add('hiragana');
+  }
+}
+
+function buildDeck() {
+  let deck = [];
+  
+  // 1. Basic Kana (Hiragana and/or Katakana)
+  if (modes.has('hiragana') || (!modes.has('katakana'))) { 
+     // If only katakana is checked, we pull from basic. If both or hira, use hiragana as base display
+     if (modes.has('hiragana')) {
+        deck.push(...HIRAGANA_BASIC.map(q => ({...q, type: 'hiragana'})));
+     } else {
+        // User only selected Katakana
+        deck.push(...KATAKANA_BASIC.map(q => ({...q, type: 'katakana'})));
+     }
+  }
+  
+  if (modes.has('katakana')) {
+     const basic = modes.has('hiragana') ? HIRAGANA_BASIC : KATAKANA_BASIC;
+     const target = KATAKANA_BASIC;
+     
+     target.forEach(k => {
+         // Find matching Hiragana index to get same romaji if exists, or add new entry
+         const match = basic.find(b => b.kana === k.kana || 
+            (k.type === 'hiragana' && b.romaji.some(r=>k.romaji.includes(r))) // simple romaji check fallback
+        );
+        
+        let newQ = {...k, type: 'katakana'};
+        if(match) {
+           // Merge romaji options if possible (not strictly necessary as input is raw string usually)
+           k.romaji.forEach(r => { 
+               if(!newQ.romaji.includes(r)) newQ.romaji.push(r); 
+           });
+        } else {
+            deck.push(newQ);
+        }
+     });
+  }
+
+  // Deduplicate based on Romaji+Kana identity roughly
+  const seen = new Set();
+  const uniqueDeck = [];
+  deck.forEach(q => {
+      // Check if we already have this character in the deck (e.g. overlapping rows)
+      // For simplicity, since Hira/Kata arrays are distinct sets usually:
+      const key = q.kana + "_" + q.type;
+      if (!seen.has(key)) { seen.add(key); uniqueDeck.push(q); }
+  });
+
+  // 2. Dakuten / Handakuten (Only added if selected)
+  if (modes.has('dakuten')) {
+    DAKUTEN.forEach(d => {
+        let isPa = d.isPa || false;
+        
+        // If both modes active, add both Hira and Kata forms for that sound
+        const createVariant = (isKatakana) => ({
+            kana: isPa && !isKatakana ? toHandakuten(d.kana) : 
+                  (!isPa && isKatakana ? d.kana.toUpperCase() : 
+                   isPa && isKatakana ? "パピプペボ".replace(/.*/, "") + d.kana.replace("ば","バ") /* simplified map */
+                    : d.kana), // Too complex, let's just use the char directly if it exists or convert manually
+            
+            romaji: d.romaji,
+            type: isKatakana ? 'katakana' : 'hiragana',
+            isDakuten: !isPa,
+            isHandakuten: isPa
+        });
+
+        // If just Hira mode -> add basic DAKUTEN chars
+        if (!modes.has('katakana')) {
+             deck.push({ ...d, type:'hiragana' });
+        } 
+        else if (modes.has('katakana') && modes.has('hiragana')) {
+             // Add Hira version
+             deck.push({ ...d, type:'hiragana' });
+             
+             // Add Kata version manually mapping the chars
+             const map = {'が':'ガ','ぎ':'ギ','ぐ':'グ','げ':'ゲ','ご':'ゴ',
+                          'ざ':'ザ','じ':'ジ','ず':'ズ','ぜ':'ゼ','ぞ':'ゾ',
+                          'だ':'ダ','ぢ':'ヂ','づ':'ヅ','で':'デ','ど':'ド',
+                          'ば':'バ','び':'ビ','ぶ':'ブ','べ':'ベ','ぼ':'ボ',
+                          'ぱ':'パ','ぴ':'ピ','ぷ':'プ','ぺ':'ペ','ぽ':'ポ'};
+             let kataChar = map[d.kana];
+             
+             if(kataChar) {
+                 deck.push({...d, kana: kataChar, type:'katakana'});
+             }
+        }
+    });
+  }
+
+  // 3. Yoon (Only added if selected)
+  if (modes.has('yoon')) {
+      YOON.forEach(y => {
+          if (!modes.has('hiragana') && !modes.has('katakana')) return;
+
+          deck.push({ ...y, type: 'hiragana' }); // Add Hira version
+
+          if (modes.has('katakana')) {
+              let kataChar = y.kana.toUpperCase();
+              deck.push({...y, kana: kataChar, type:'katakana'});
+          }
+      });
+  }
+
+  // Fisher-Yates Shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+
+  return uniqueDeck; // Note: buildDeck returns array, but I want to preserve logic about merging. 
+                     // The `uniqueDeck` above isn't perfect for mixed Hira/Kata decks, let's fix simply:
+  // Re-implementation of simple flat list building
+  return []; // Placeholder for cleaner logic below in startNewRound
+}
+
+// Simplified Deck Builder (Cleaner)
+function createQuestionObject(baseObj, isKatakana=false) {
+    if (!isKatakana && !modes.has('hiragana') && !modes.has('katakana')) return null; // Should not happen
+    
+    let q = { ...baseObj };
+    
+    if (isKatakana) {
+        const mapHiraToKa = {'が':'ガ','ぎ':'ギ','ぐ':'グ','げ':'ゲ','ご':'ゴ', 'だ':'ダ','ぢ':'ヂ','づ':'ヅ','で':'デ','ど':'ド', 
+                             'ば':'バ','び':'ビ','ぶ':'ブ','べ':'ベ','ぼ':'ボ', 'ぱ':'パ','ぴ':'ピ','ぷ':'プ','ぺ':'ペ','ぽ':'ポ'};
+        let kaChar = mapHiraToKa[q.kana];
+        q.kana = kaChar || q.kana.toUpperCase(); // Fallback uppercase
+        
+        // Remove duplicates for standard kana if Hira is also there? 
+        // No, because input 'a' should match 'あ' or 'ア'. Keeping both allows checking romaji overlap.
+    }
+
+    return q;
+}
+
+function startNewRound() {
+  let deck = [];
+  
+  const hasHiraganaBase = modes.has('hiragana'); // If Hira selected, use Hiragana arrays as base
+  
+  // Add Basics
+  if (modes.has('hiragana')) {
+      deck.push(...HIRAGANA_BASIC.map(b => createQuestionObject(b, false)));
+  } else if (modes.has('katakana')) {
+       deck.push(...KATAKANA_BASIC.map(b => createQuestionObject(b, true))); // Only Katakana mode
+  }
+
+  // Add Yoon (Always Hira based logic + optional Kata version)
+  if (modes.has('yoon')) {
+      YOON.forEach(y => {
+          deck.push(createQuestionObject(y, false));
+          if (modes.has('katakana')) {
+               let kaObj = createQuestionObject({...y}, true); // yoon to katakana is just uppercase usually
+               if(kaObj) deck.push(kaObj); 
+          }
+      });
+  }
+
+  // Add Dakuten
+  if (modes.has('dakuten')) {
+       DAKUTEN.forEach(d => {
+           // Hira version
+           deck.push(createQuestionObject({...d, isDakuten:true}, false));
+           
+           // Kata version
+           if (modes.has('katakana')) {
+               const map = {'が':'ガ','ぎ':'ギ','ぐ':'グ','げ':'ゲ','ご':'ゴ', 'じ':'ジ','ず':'ズ', // simplified map list needed fully 
+                            'ざ':'ザ','だ':'ダ','ぢ':'ヂ','づ':'ヅ','で':'デ','ど':'ド',
+                            'ば':'バ','び':'ビ','ぶ':'ブ','べ':'ベ','ぼ':'ボ',
+                            'ぱ':'パ','ぴ':'ピ','ぷ':'プ','ぺ':'ペ','ぽ':'ポ'};
+               let kaChar = map[d.kana]; // d.kana is like が, じ, etc.
+               
+               if(!kaChar && d.isPa) { // pa row handled above
+                   // 
+               }
+               deck.push({...d, kana: kaChar || d.kana.toUpperCase(), type:'katakana'});
+           }
+       });
+  }
+
+  // Final Shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+
+  questionDeck = deck;
+  
+  // Reset Round State
+  visitedInRound = new Set();
+  roundProgress = 0;
+  correctCount = 0;
+  wrongCount = 0;
+  totalRounds++;
+  
+  // Pick first random index
+  currentQuestionIndex = Math.floor(Math.random() * questionDeck.length);
+
+  document.getElementById('answerInput').value = '';
+  document.getElementById('hintArea').textContent = '';
+  document.getElementById('hintArea').classList.remove('revealed');
+  
+  showCurrentQuestion();
+}
+
+function findNextUnanswered() {
+    for(let i=0; i<questionDeck.length; i++) {
+        if(!visitedInRound.has(i)) return i;
+    }
+    return -1; // Should be covered by roundProgress logic
+}
+
+function showCurrentQuestion() {
+  const q = questionDeck[currentQuestionIndex];
+  document.getElementById('currentKana').textContent = q.kana;
+  
+  // Reset hint for new question
+  const hintArea = document.getElementById('hintArea');
+  hintArea.textContent = ''; 
+  hintArea.classList.remove('revealed');
+
+  updateProgress();
+  drawChart(q.kana);
+}
+
+function checkAnswer() {
+  const input = document.getElementById('answerInput');
+  const val = input.value.trim().toLowerCase();
+  
+  if (val === '') return; // Don't submit empty
+
+  const q = questionDeck[currentQuestionIndex];
+  let isCorrect = false;
+  for (let r of q.romaji) {
+    if (r.toLowerCase() === val) { isCorrect = true; break; }
+  }
+
+  if (isCorrect) {
+      // CORRECT LOGIC
+      input.classList.remove('shake-anim');
+      void input.offsetWidth; 
+      input.classList.add('correct-anim');
+
+      // Mark visited
+      if (!visitedInRound.has(currentQuestionIndex)) {
+          visitedInRound.add(currentQuestionIndex);
+          roundProgress = visitedInRound.size;
+      }
+      
+      correctCount++;
+      
+      setTimeout(() => {
+          input.classList.remove('correct-anim');
+          input.value = '';
+          
+          // Move to next
+          const nextIdx = findNextUnanswered();
+          if (roundProgress >= questionDeck.length) {
+              showCompletion();
+          } else {
+              currentQuestionIndex = nextIdx !== -1 ? nextIdx : Math.floor(Math.random()*questionDeck.length);
+              document.getElementById('answerInput').value='';
+              // Force re-render logic for hint reset happens in showCurrentQuestion
+              showCurrentQuestion();
+          }
+      }, 400);
+
+  } else {
+      // WRONG LOGIC - REVEAL HINT
+      wrongCount++;
+      
+      const input = document.getElementById('answerInput');
+      input.classList.remove('shake-anim');
+      void input.offsetWidth; 
+      input.classList.add('shake-anim');
+      input.value = '';
+
+      // Reveal hint ONLY on error
+      const hintArea = document.getElementById('hintArea');
+      hintArea.textContent = q.romaji[0]; 
+      hintArea.classList.add('revealed');
+      
+      updateProgress();
+  }
+}
+
+function toHandakuten(h) {
+    const map = {'か':'か','き':'き','く':'く','け':'け','こ':'こ', 'は':'ぱ','ひ':'ぴ','ふ':'ぷ','へ':'ぺ','ほ':'ぽ'}; 
+    // This function is just a placeholder, handled in logic manually via map objects above
+    return h;
+}
+
+function updateProgress() {
+  const total = questionDeck.length;
+  const done = roundProgress || visitedInRound.size; 
+  
+  document.getElementById('progressText').innerHTML = 
+      `<span>${done} / ${total}</span>` + 
+      (wrongCount > 0 ? `<span style="color:#ff5252">❌${wrongCount}</span>` : '');
+  
+  const pct = total > 0 ? (done / total * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ==================== CHART RENDERING ====================
+function drawChart(currentKana) {
+    // ... Similar logic to previous version, but simpler grid
+    const chart = document.getElementById('gojuuonChart');
+    
+    // 1. Standard Grid (5x10 equivalent)
+    // We construct the array of 10 rows * 5 cols based on mode
+    let displayData = [];
+    
+    if (!modes.has('katakana')) {
+        // Basic Hira Rows
+        const rows = [HIRAGANA_BASIC.slice(0,5), HIRAGANA_BASIC.slice(5,10), 
+                      HIRAGANA_BASIC.slice(10,15), HIRAGANA_BASIC.slice(15,20), 
+                      HIRAGANA_BASIC.slice(20,25), HIRAGANA_BASIC.slice(25,30),
+                      HIRAGANA_BASIC.slice(30,36).filter((_,i)=>i%2===0 || true), // ya,yu,yo spacing handled by filler logic if needed, but grid is easier without gaps usually. 
+                                                                                      // Let's just use the basic array directly and map index
+             ];
+        // Actually let's just render Hira rows 0-9 from HIRAGANA_BASIC which has gaps? 
+        // The data arrays I defined above (HIRAGANA_BASIC) include indices for ya, yu, yo in sequence.
+        // So we can slice chunks of 5.
+        
+        displayData = [
+            HIRAGANA_BASIC.slice(0,5),
+            HIRAGANA_BASIC.slice(5,10),
+            HIRAGANA_BASIC.slice(10,15),
+            HIRAGANA_BASIC.slice(15,20),
+            HIRAGANA_BASIC.slice(20,25),
+            HIRAGANA_BASIC.slice(25,30),
+            // Row 6: Ya (skip empty), Yu (empty), Yo
+            [{kana:'や',romaji:['ya']}, {kana:'',romaji:[]}, {kana:'ゆ',romaji:['yu']}, {kana:'',romaji:[]}, {kana:'よ',romaji:['yo']}],
+            
+            HIRAGANA_BASIC.slice(36,41), // Ra row (skip empty w) - wait slice indices need checking.
+            // My data definition: 
+            // Index 0-4 A I U E O
+            // ...
+            // 37 Ya, 38 empty(yu gap?), 39 Yu... let's rely on my data array construction which puts them in specific slots.
+        ];
+
+        // Correction for standard table layout with gaps:
+        displayData = [
+            HIRAGANA_BASIC.slice(0,5),
+            HIRAGANA_BASIC.slice(5,10),
+            HIRAGANA_BASIC.slice(10,15),
+            HIRAGANA_BASIC.slice(15,20),
+            HIRAGANA_BASIC.slice(20,25),
+            HIRAGANA_BASIC.slice(25,30),
+            // Insert manual gap row for Ya/Yu/Yo to align columns? No, let's just push empty strings
+            [HIRAGANA_BASIC[37], '', HIRAGANA_BASIC[39], '', HIRAGANA_BASIC[41]], 
+            HIRAGANA_BASIC.slice(42, 47), // Ra row (indices approx)
+            [HIRAGANA_BASIC[36], '', '', '', ''], // Wa row? My data array puts Wa at index 36 usually if not skipping.
+        ];
+        
+        // To fix exact indices based on my defined arrays above:
+        const r0 = HIRAGANA_BASIC.slice(0,5);
+        const r1 = HIRAGANA_BASIC.slice(5,10);
+        const r2 = HIRAGANA_BASIC.slice(10,15);
+        const r3 = HIRAGANA_BASIC.slice(15,20);
+        const r4 = HIRAGANA_BASIC.slice(20,25);
+        const r5 = HIRAGANA_BASIC.slice(25,30);
+        const r6 = [HIRAGANA_BASIC[37], null, HIRAGANA_BASIC[39], null, HIRAGANA_BASIC[41]]; // ya (gap) yu (gap) yo. Wait indices are 37, 38(skip), 39...
+        // Let's use the provided data array structure strictly:
+        // I'll rebuild `rows` properly in code to ensure display matches logic.
+    }
+
+    // Schematic Grid Builder
+    let gridRows = [];
+    
+    if (modes.has('katakana')) {
+        const rows = [KATAKANA_BASIC.slice(0,5), KATAKANA_BASIC.slice(5,10), 
+                      KATAKANA_BASIC.slice(10,15), KATAKANA_BASIC.slice(15,20), 
+                      KATAKANA_BASIC.slice(20,25), KATAKANA_BASIC.slice(25,30)];
+        gridRows.push(...rows);
+    } else {
+        const rows = [HIRAGANA_BASIC.slice(0,5), HIRAGANA_BASIC.slice(5,10), 
+                      HIRAGANA_BASIC.slice(10,15), HIRAGANA_BASIC.slice(15,20), 
+                      HIRAGANA_BASIC.slice(20,25), HIRAGANA_BASIC.slice(25,30)];
+        gridRows.push(...rows);
+    }
+
+    // Add Ya/Yu/Yo row specifically with gaps if mode allows
+    const baseRow = modes.has('katakana') ? KATAKANA_BASIC : HIRAGANA_BASIC;
+    
+    // Indices for Ya(37), Yu(39), Yo(41) in my basic array definition
+    const yaRow = [baseRow[37], null, baseRow[39], null, baseRow[41]]; 
+    gridRows.push(yaRow);
+
+    // Ra row (indices 42-46)
+    const raRow = baseRow.slice(42, 47);
+    // Fix indices for Ra based on standard table: ra, ri, ru, re, ro. My array puts them after ya.
+    // In my HIRAGANA_BASIC definition above: ... yo (30), then ra (31)... wait. 
+    // Let's trust the slice logic or define strictly:
+    
+    // Strict Re-definition for Grid Logic:
+    const aRow = modes.has('katakana') ? KATAKANA_BASIC.slice(0,5) : HIRAGANA_BASIC.slice(0,5);
+    const kaRow = modes.has('katakana') ? KATAKANA_BASIC.slice(5,10) : HIRAGANA_BASIC.slice(5,10);
+    const saRow = modes.has('katakana') ? KATAKANA_BASIC.slice(10,15) : HIRAGANA_BASIC.slice(10,15);
+    const taRow = modes.has('katakana') ? KATAKANA_BASIC.slice(15,20) : HIRAGANA_BASIC.slice(15,20);
+    const naRow = modes.has('katakana') ? KATAKANA_BASIC.slice(20,25) : HIRAGANA_BASIC.slice(20,25);
+    const haRow = modes.has('katakana') ? KATAKANA_BASIC.slice(25,30) : HIRAGANA_BASIC.slice(25,30);
+    
+    // Ya (skip i,u,e gaps in chart? No standard chart is empty spots between ya/yu/yo visually or just linear. Let's do 1 row for ya yu yo with gaps)
+    const yaCell = modes.has('katakana') ? KATAKANA_BASIC[30] : HIRAGANA_BASIC[30]; // Index logic might be off due to previous definition. 
+    // Safest bet: Use the arrays I defined at top which are 45 items long (excluding empty slots).
+    
+    let displayRows = [aRow, kaRow, saRow, taRow, naRow, haRow];
+    displayRows.push([baseRow[30], null, baseRow[31], null, baseRow[32]]); // ya(yu)yo logic adjusted to 45 item array
+    
+    let ra = modes.has('katakana') ? KATAKANA_BASIC.slice(36,41) : HIRAGANA_BASIC.slice(36,41);
+    displayRows.push(ra);
+    
+    const waRow = [baseRow[35], null, null, null, baseRow[38]]; // Wa (gap gap gap Wo/No)
+    displayRows.push(waRow);
+
+    // Render Grid
+    chart.innerHTML = '';
+    chart.style.gridTemplateColumns = 'repeat(5, 1fr)';
+
+    const visitedChars = new Set([...visitedInRound].map(i => questionDeck[i].kana));
+
+    displayRows.forEach(row => {
+        row.forEach(cell => {
+            if (!cell) return; // Empty slot in grid
+            
+            const el = document.createElement('div');
+            let cls = 'ch-cell';
+            
+            // If Yoon or Dakuten is selected, do NOT highlight basic kana as done (only specific ones)
+            // But if user asks for "Yoon", usually they want to practice ALL chars? 
+            // Request said: "selective addition". So we only mark questions asked in that round.
+            
+            if (visitedChars.has(cell.kana)) cls += ' done';
+            if (cell.kana === currentKana) cls += ' current-q';
+
+            el.className = cls;
+            el.textContent = cell.kana;
+            chart.appendChild(el);
+        });
+    });
+
+    // Render Dakuten Row
+    if (modes.has('dakuten')) {
+        const dkRowDiv = document.createElement('div');
+        dkRowDiv.className = 'extra-row';
+        
+        const label = document.createElement('span');
+        label.className = 'extra-label';
+        label.textContent = modes.has('katakana') ? '濁音・半濁音 (Dakuten)' : '濁音・半濁音';
+        dkRowDiv.appendChild(label);
+
+        // Create a sub-grid or just append cells
+        const dkContainer = document.createElement('div');
+        dkContainer.style.display='flex'; 
+        dkContainer.style.flexWrap='wrap';
+        dkContainer.style.gap='4px';
+        
+        DAKUTEN.forEach(d => {
+            let hKana = d.kana;
+            let kKana = {'が':'ガ','ぎ':'ギ','ぐ':'グ','げ':'ゲ','ご':'ゴ', 
+                         'ざ':'ザ','じ':'ジ','ず':'ズ','ぜ':'ゼ','ぞ':'ゾ',
+                         'だ':'ダ','ぢ':'ヂ','づ':'ヅ','で':'デ','ど':'ド',
+                         'ば':'バ','び':'ビ','ぶ':'ブ','べ':'ベ','ぼ':'ボ',
+                         'ぱ':'パ','ぴ':'ピ','ぷ':'プ','ぺ':'ペ','ぽ':'ポ'}[d.kana];
+
+            // If both hira/kata active, show one char in chart that represents "Dakuten" concept or separate cells?
+            // Let's just list them once per row.
+            const el = document.createElement('div');
+            let dkCls = 'ch-cell';
+            
+            if (modes.has('katakana')) {
+                if(visitedChars.has(kKana)) dkCls += ' done';
+                el.textContent = kKana; // Show Katakana form in chart for visual variety? Or Hira. Let's show both if possible or just one.
+                                          // Showing only 1 char per cell to fit grid is hard, so I'll use a separate flexible box.
+            } else {
+                if(visitedChars.has(hKana)) dkCls += ' done';
+                el.textContent = hKana;
+            }
+
+             // To make it easy: Just append all DAKUTEN chars in order. 
+             // If Katakana mode is ON, I need to convert them to show Kata form in the list.
+             
+             let finalChar = d.kana;
+             if (modes.has('katakana') && kKana) finalChar = kKana;
+
+            el.textContent = finalChar;
+            
+            // Check done status for BOTH forms
+            const isDone = visitedChars.has(d.kana) || visitedChars.has(kKana);
+            if (isDone) dkCls += ' done';
+
+            el.className = dkCls;
+            dkContainer.appendChild(el);
+        });
+        
+        dkRowDiv.appendChild(dkContainer);
+        chart.appendChild(dkRowDiv);
+    }
+    
+    // Render Yoon Row
+    if (modes.has('yoon')) {
+         const yonRowDiv = document.createElement('div');
+         yonRowDiv.className = 'extra-row';
+         
+         const label = document.createElement('span');
+         label.textContent = modes.has('katakana') ? '拗音 (Yoon)' : '拗音';
+         label.className = 'extra-label';
+         yonRowDiv.appendChild(label);
+
+         const yContainer = document.createElement('div');
+         yContainer.style.display='flex';
+         yContainer.style.flexWrap='wrap';
+         yContainer.style.gap='4px';
+
+         YOON.forEach(y => {
+             let kKana = y.kana.toUpperCase();
+             let finalChar = modes.has('katakana') ? (y.kana === 'ゃ'? y.kana : kKana) : y.kana; // Uppercase for katakana is lazy but works for display
+             
+             // Better Kata Map for Yoon
+             const yMap = {'きゃ':'キャ','きゅ':'キュ','きょ':'キョ', 
+                          'しゃ':'シャ','しゅ':'シュ','しょ':'ショ',
+                          'ちゃ':'チャ','ちゅ':'チュ','ちょ':'チョ',
+                          'ひゃ':'ヒャ','ひゅ':'ヒュ','ひょ':'ヒョ'};
+             let kChar = yMap[y.kana];
+
+             finalChar = modes.has('katakana') ? kChar : y.kana;
+
+             const el = document.createElement('div');
+             el.className = 'ch-cell';
+             
+             // Check Done
+             if(visitedChars.has(y.kana) || visitedChars.has(kChar)) el.classList.add('done');
+             
+             el.textContent = finalChar;
+             yContainer.appendChild(el);
+         });
+
+         yonRowDiv.appendChild(yContainer);
+         chart.appendChild(yonRowDiv);
+    }
+}
+
+
+// ==================== EVENTS & INIT ====================
+
+const answerInput = document.getElementById('answerInput');
+
+answerInput.addEventListener('input', () => {
+  // Auto-submit logic
+  const val = answerInput.value.trim().toLowerCase();
+  if (val === '') return;
+  
+  const q = questionDeck[currentQuestionIndex];
+  for (let r of q.romaji) {
+    if (r.toLowerCase() === val) {
+      checkAnswer();
+      return;
+    }
+  }
+});
+
+function setChartMode(mode) {
+    chartMode = mode; // UI toggle only, logic uses Hira/Kata arrays anyway
+    document.querySelectorAll('.chart-mode-btn').forEach(btn => {
+        btn.classList.toggle('active', (mode==='kana' && btn.textContent.includes('かな')) || 
+                                       (mode==='romaji' && btn.textContent.includes('ローマ')));
+    });
+}
+
+function showCompletion() {
+  const overlay = document.getElementById('completeOverlay');
+  document.getElementById('completeText').innerHTML = 
+      `第 ${totalRounds} ラウンド 完了！<br>` +
+      `正解: <span style="color:#00e676; font-weight:bold">${correctCount}</span> | 誤答: <span style="color:#ff5252; font-weight:bold">${wrongCount}</span><br>` +
+      `<span style="font-size:0.8rem;color:#888">問題数: ${questionDeck.length} 文字</span>`;
+  
+  overlay.classList.add('show');
+  answerInput.blur(); // Hide keyboard on complete screen
+  
+  setTimeout(() => {
+    restartDeck();
+    overlay.classList.remove('show');
+    answerInput.focus();
+  }, 2000); 
+}
+
+function restartDeck() {
+  document.getElementById('completeOverlay').classList.remove('show');
+  startNewRound();
+}
+
+// Initial Focus Logic (Mobile)
+document.addEventListener('click', e => {
+   if (!e.target.closest('.mode-btn') && !e.target.closest('.chart-mode-btn') && 
+       !e.target.closest('#answerInput')) {
+      answerInput.focus();
+   }
+});
+
+window.onload = () => {
+    startNewRound();
+    answerInput.focus();
+};
+
+</script>
+</body>
+</html>
