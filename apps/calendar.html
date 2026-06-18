@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>時鐘月曆</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #060403;
+      color: #fcf5ea;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .clock-container {
+      position: relative;
+      margin-bottom: 28px;
+      text-align: center;
+    }
+    .digital-clock {
+      font-size: 54px;
+      font-weight: 300;
+      color: #e8c86a;
+      letter-spacing: 6px;
+      background: #0d0906;
+      padding: 16px 44px;
+      border: 1px solid #3d3024;
+      display: inline-block;
+    }
+    .clock-seconds {
+      font-size: 24px;
+      color: #8a7a66;
+      vertical-align: super;
+      font-weight: 300;
+    }
+    .clock-date {
+      font-size: 14px;
+      color: #8a7a66;
+      margin: 8px auto 0;
+      letter-spacing: 3px;
+      cursor: pointer;
+      transition: color 0.2s;
+      border-bottom: 1px dashed #5a4a3a;
+      display: table;
+      padding: 0 10px 2px;
+    }
+    .clock-date:hover {
+      color: #e8c86a;
+      border-bottom-color: #e8c86a;
+    }
+    .date-picker {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0d0906;
+      border: 1px solid #3d3024;
+      padding: 16px;
+      width: 320px;
+      z-index: 100;
+      display: none;
+    }
+    .date-picker .picker-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .date-picker .picker-header .nav-btn {
+      background: none;
+      border: 1px solid #3d3024;
+      color: #d4c6b5;
+      font-size: 14px;
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .date-picker .picker-header .nav-btn:hover {
+      color: #e8c86a;
+      border-color: #e8c86a;
+    }
+    .date-picker .picker-header .picker-year {
+      font-size: 16px;
+      color: #fcf5ea;
+      font-weight: 500;
+      letter-spacing: 1px;
+    }
+    .date-picker .picker-inputs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .date-picker .picker-inputs input {
+      flex: 1;
+      background: #060403;
+      border: 1px solid #3d3024;
+      color: #fcf5ea;
+      font-size: 13px;
+      padding: 5px 6px;
+      text-align: center;
+      outline: none;
+      font-family: inherit;
+    }
+    .date-picker .picker-inputs input:focus {
+      border-color: #e8c86a;
+    }
+    .date-picker .picker-inputs input::placeholder {
+      color: #5a4a3a;
+    }
+    .date-picker .picker-months {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+    }
+    .date-picker .picker-month {
+      text-align: center;
+      padding: 6px 2px;
+      font-size: 12px;
+      color: #8a7a66;
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+      border: 1px solid transparent;
+    }
+    .date-picker .picker-month:hover {
+      background: #1e140e;
+      color: #fcf5ea;
+    }
+    .date-picker .picker-month.active {
+      background: #e8c86a;
+      color: #060403;
+      font-weight: 600;
+    }
+    .date-picker .picker-month.today-month {
+      border-color: #e8c86a;
+    }
+    .date-picker .picker-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-top: 8px;
+    }
+    .date-picker .picker-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-top: 8px;
+    }
+    .date-picker .picker-weekday {
+      text-align: center;
+      font-size: 10px;
+      color: #5a4a3a;
+      padding: 4px 0;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .date-picker .picker-day {
+      text-align: center;
+      font-size: 12px;
+      color: #b8aa98;
+      padding: 4px 0;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .date-picker .picker-day:hover {
+      background: #1e140e;
+      color: #fcf5ea;
+    }
+    .date-picker .picker-day.other-month {
+      color: #2a1f16;
+    }
+    .date-picker .picker-day.today {
+      background: #e8c86a;
+      color: #060403;
+      font-weight: 600;
+    }
+    .date-picker .picker-day.selected {
+      outline: 2px solid #4dd0e1;
+      outline-offset: -2px;
+      color: #4dd0e1;
+    }
+    .date-picker .picker-go-btn {
+      width: 100%;
+      margin-top: 8px;
+      padding: 6px;
+      background: #1e140e;
+      border: 1px solid #e8c86a;
+      color: #e8c86a;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      letter-spacing: 1px;
+      transition: background 0.15s;
+    }
+    .date-picker .picker-go-btn:hover {
+      background: #2a1f16;
+    }
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0.15; }
+    }
+    .colon { animation: blink 1s infinite; }
+    .calendar-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      width: 100%;
+      max-width: 1140px;
+      justify-items: center;
+    }
+    .month-card {
+      background: #0d0906;
+      border: 1px solid #3d3024;
+      width: 100%;
+      max-width: 360px;
+      user-select: none;
+      position: relative;
+    }
+    .month-card.pinned {
+      border-color: #e8c86a;
+    }
+    .pin-icon {
+      position: absolute;
+      top: -1px;
+      right: 12px;
+      background: #e8c86a;
+      color: #060403;
+      font-size: 9px;
+      padding: 2px 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      z-index: 10;
+    }
+    .header {
+      background: #0d0906;
+      color: #fcf5ea;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #3d3024;
+    }
+    .year-month {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #fcf5ea;
+    }
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      background: #080504;
+      border-bottom: 1px solid #2a1f16;
+    }
+    .weekday {
+      text-align: center;
+      padding: 10px 0;
+      font-size: 11px;
+      color: #5a4e40;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .weekday:first-child, .weekday:last-child { color: #e8c86a; }
+    .days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      padding: 6px;
+      gap: 2px;
+      height: 295px;
+    }
+    .day {
+      text-align: center;
+      padding: 10px 0;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.1s;
+      color: #d4c6b5;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .day:hover {
+      background: #1e140e;
+      color: #fcf5ea;
+    }
+    .day.other-month { color: #2a1f16; }
+    .day.today {
+      background: #e8c86a;
+      color: #060403;
+      font-weight: 600;
+    }
+    .day.selected {
+      outline: 2px solid #4dd0e1;
+      outline-offset: -2px;
+      color: #4dd0e1;
+    }
+    .day.today.selected {
+      color: #060403;
+      outline-color: #4dd0e1;
+    }
+    .day.sunday { color: #d44c3a; }
+    .day.saturday { color: #3a7a9a; }
+    .controls {
+      margin-top: 28px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      font-family: inherit;
+      background: #0d0906;
+      border: 1px solid #3d3024;
+      color: #d4c6b5;
+      padding: 8px 20px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 13px;
+      letter-spacing: 1px;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    button:hover {
+      background: #1e140e;
+      border-color: #e8c86a;
+      color: #fcf5ea;
+    }
+    #dateInfo {
+      margin-top: 18px;
+      color: #8a7a66;
+      font-size: 14px;
+      height: 1.5em;
+      text-align: center;
+      width: 100%;
+      letter-spacing: 1px;
+    }
+    .compare-mode-btn {
+      font-size: 12px;
+      padding: 6px 14px;
+    }
+    .compare-mode-btn.active {
+      background: #1e140e;
+      border-color: #e8c86a;
+      color: #e8c86a;
+    }
+    .compare-panel {
+      width: 100%;
+      max-width: 420px;
+      margin-top: 8px;
+      padding: 10px 16px;
+      background: #0d0906;
+      border: 1px solid #3d3024;
+      font-size: 13px;
+      color: #8a7a66;
+      text-align: center;
+      letter-spacing: 0.5px;
+      display: none;
+    }
+    .compare-panel .ref-date {
+      color: #e8c86a;
+    }
+    .compare-panel .diff-result {
+      color: #fcf5ea;
+      font-weight: 500;
+    }
+    .day-tooltip {
+      position: fixed;
+      background: #060403;
+      border: 1px solid #e8c86a;
+      color: #fcf5ea;
+      font-size: 12px;
+      padding: 4px 10px;
+      pointer-events: none;
+      z-index: 999;
+      white-space: nowrap;
+      display: none;
+    }
+    .pin-btn {
+      font-size: 10px;
+      padding: 2px 10px;
+      background: transparent;
+      border: 1px solid #3d3024;
+      margin: 0;
+      width: auto;
+      letter-spacing: 1px;
+      color: #8a7a66;
+    }
+    .pin-btn:hover {
+      border-color: #8a7a66;
+      color: #d4c6b5;
+      background: transparent;
+    }
+    .pin-btn.active {
+      background: transparent;
+      color: #e8c86a;
+      border-color: #e8c86a;
+    }
+    .pin-btn.active:hover {
+      background: rgba(232, 200, 106, 0.1);
+    }
+    .key-hint {
+      font-size: 11px;
+      color: #3d3024;
+      margin-top: 14px;
+      letter-spacing: 1px;
+    }
+    .ornament {
+      text-align: center;
+      color: #3d3024;
+      font-size: 14px;
+      margin: 4px 0 10px 0;
+      letter-spacing: 6px;
+    }
+    @media (max-width: 768px) {
+      .digital-clock { font-size: 32px; padding: 12px 24px; letter-spacing: 3px; }
+      .clock-seconds { font-size: 16px; }
+      .clock-date { font-size: 12px; }
+      .calendar-container { grid-template-columns: 1fr !important; gap: 16px !important; max-width: 100% !important; }
+      .month-card { max-width: 100% !important; }
+      .controls { flex-wrap: wrap; justify-content: center; }
+      .hide-mobile { display: none !important; }
+      .key-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div style="position: relative; width: 100%; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+  <div class="clock-container">
+    <div class="digital-clock">
+      <span id="clockHours">00</span><span class="colon">:</span><span id="clockMinutes">00</span><span class="clock-seconds" id="clockSeconds">00</span>
+    </div>
+    <div class="clock-date" id="clockDate" title="點擊以選擇日期">2026年6月18日 星期四</div>
+    <div class="date-picker" id="datePicker"></div>
+  </div>
+
+  <div class="ornament">&#8212; &#10087; &#8212;</div>
+
+  <div class="calendar-container" id="calendarContainer"></div>
+
+  <div id="dateInfo">點擊日期以選擇</div>
+
+  <div class="controls hide-mobile">
+    <button id="prev">&#9664; 上月</button>
+    <button id="todayBtn">&#9679; 今日</button>
+    <button id="next">下月 &#9654;</button>
+    <button id="compareBtn" class="compare-mode-btn">&#916; 日期差</button>
+  </div>
+
+  <div class="compare-panel" id="comparePanel"></div>
+
+  <div class="day-tooltip" id="dayTooltip"></div>
+
+  <div class="key-hint">&#8592;  &#8594; 鍵盤方向鍵導航  ·  Enter 前往今日</div>
+</div>
+
+<script>
+const weekDayNames = ['日','一','二','三','四','五','六'];
+
+function updateClock() {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  
+  document.getElementById('clockHours').textContent = hours;
+  document.getElementById('clockMinutes').textContent = minutes;
+  document.getElementById('clockSeconds').textContent = seconds;
+  
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  const dow = weekDayNames[now.getDay()];
+  const el = document.getElementById('clockDate');
+  el.textContent = `${year}年${month}月${day}日 星期${dow}`;
+  el.dataset.year = year;
+  el.dataset.month = month;
+  el.dataset.day = day;
+}
+
+function renderDatePicker(targetYear, targetMonth) {
+  const now = new Date();
+  const todayY = now.getFullYear();
+  const todayM = now.getMonth();
+  const todayD = now.getDate();
+  const picker = document.getElementById('datePicker');
+  
+  let html = '<div class="picker-header">';
+  html += `<button class="nav-btn" data-picker-nav="-10">&#171;&#171;</button>`;
+  html += `<button class="nav-btn" data-picker-nav="-1">&#9664;</button>`;
+  html += `<span class="picker-year">${targetYear} 年</span>`;
+  html += `<button class="nav-btn" data-picker-nav="1">&#9654;</button>`;
+  html += `<button class="nav-btn" data-picker-nav="10">&#187;&#187;</button>`;
+  html += '</div>';
+  
+  html += '<div class="picker-inputs">';
+  html += `<input type="text" id="pickerYear" value="${targetYear}" placeholder="年" maxlength="4">`;
+  html += `<input type="text" id="pickerMonth" value="${targetMonth + 1}" placeholder="月" maxlength="2">`;
+  html += `<input type="text" id="pickerDay" value="" placeholder="日" maxlength="2">`;
+  html += '</div>';
+  
+  html += '<button class="picker-go-btn" id="pickerGoBtn">跳轉</button>';
+  
+  html += '<div class="picker-months">';
+  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  for (let m = 0; m < 12; m++) {
+    const cls = m === targetMonth ? 'picker-month active' : 'picker-month';
+    const tc = m === todayM && targetYear === todayY ? ' today-month' : '';
+    html += `<div class="${cls}${tc}" data-picker-month="${m}">${monthNames[m]}</div>`;
+  }
+  html += '</div>';
+  
+  // Days of the selected month
+  html += '<div class="picker-weekdays">';
+  const wd = ['日','一','二','三','四','五','六'];
+  wd.forEach(d => { html += `<div class="picker-weekday">${d}</div>`; });
+  html += '</div>';
+  
+  html += '<div class="picker-days">';
+  const firstDay = new Date(targetYear, targetMonth, 1).getDay();
+  const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const daysInPrev = new Date(targetYear, targetMonth, 0).getDate();
+  
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const d = daysInPrev - i;
+    const pm = targetMonth === 0 ? 11 : targetMonth - 1;
+    const py = targetMonth === 0 ? targetYear - 1 : targetYear;
+    html += `<div class="picker-day other-month" data-picker-date="${py}-${pm + 1}-${d}">${d}</div>`;
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    let cls = 'picker-day';
+    if (d === todayD && targetMonth === todayM && targetYear === todayY) cls += ' today';
+    html += `<div class="${cls}" data-picker-date="${targetYear}-${targetMonth + 1}-${d}">${d}</div>`;
+  }
+  const remaining = (7 - ((firstDay + daysInMonth) % 7)) % 7;
+  for (let d = 1; d <= remaining; d++) {
+    const nm = targetMonth === 11 ? 0 : targetMonth + 1;
+    const ny = targetMonth === 11 ? targetYear + 1 : targetYear;
+    html += `<div class="picker-day other-month" data-picker-date="${ny}-${nm + 1}-${d}">${d}</div>`;
+  }
+  html += '</div>';
+  
+  picker.innerHTML = html;
+  picker.style.display = 'block';
+  picker._year = targetYear;
+  picker._month = targetMonth;
+}
+
+function jumpToDate(y, m, d) {
+  document.getElementById('datePicker').style.display = 'none';
+  const dt = new Date(y, m, d);
+  baseYear = dt.getFullYear();
+  baseMonth = dt.getMonth();
+  pinnedMonthData = null;
+  pinnedPosition = 0;
+  pinnedExtraOffset = 0;
+  selectedDay = { year: dt.getFullYear(), month: dt.getMonth(), day: dt.getDate() };
+  render();
+  document.getElementById('dateInfo').textContent = `✦ ${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日 星期${weekDayNames[dt.getDay()]} ✦`;
+}
+
+// Date picker event delegation
+document.addEventListener('click', (e) => {
+  const picker = document.getElementById('datePicker');
+  const clockDate = document.getElementById('clockDate');
+  
+  // Toggle picker on clock date click
+  if (e.target === clockDate || clockDate.contains(e.target)) {
+    const now = new Date();
+    const showing = picker.style.display === 'block';
+    if (!showing) {
+      renderDatePicker(now.getFullYear(), now.getMonth());
+    } else {
+      picker.style.display = 'none';
+    }
+    return;
+  }
+  
+  if (picker.style.display !== 'block') return;
+  
+  // Nav buttons
+  if (e.target.dataset.pickerNav) {
+    const step = parseInt(e.target.dataset.pickerNav);
+    let y = picker._year;
+    let m = picker._month;
+    y += step;
+    if (step === -1 || step === 1) {
+      // For single year step, adjust month too
+      y = picker._year + step;
+    }
+    renderDatePicker(y, m);
+    return;
+  }
+  
+  // Month click
+  if (e.target.dataset.pickerMonth !== undefined) {
+    const m = parseInt(e.target.dataset.pickerMonth);
+    renderDatePicker(picker._year, m);
+    return;
+  }
+  
+  // Day click
+  if (e.target.dataset.pickerDate) {
+    const parts = e.target.dataset.pickerDate.split('-').map(Number);
+    jumpToDate(parts[0], parts[1] - 1, parts[2]);
+    return;
+  }
+  
+  // Go button
+  if (e.target.id === 'pickerGoBtn') {
+    const y = parseInt(document.getElementById('pickerYear').value);
+    const m = parseInt(document.getElementById('pickerMonth').value) - 1;
+    const d = parseInt(document.getElementById('pickerDay').value) || 1;
+    if (!isNaN(y) && !isNaN(m) && m >= 0 && m <= 11) {
+      jumpToDate(y, m, d);
+    }
+    return;
+  }
+  
+  // Close on outside click
+  if (!picker.contains(e.target) && e.target !== clockDate) {
+    picker.style.display = 'none';
+  }
+});
+
+// Enter key on inputs
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.closest('.picker-inputs')) {
+    const goBtn = document.getElementById('pickerGoBtn');
+    if (goBtn) goBtn.click();
+  }
+});
+
+updateClock();
+setInterval(updateClock, 1000);
+
+const today = new Date();
+let baseYear = today.getFullYear();
+let baseMonth = today.getMonth(); // This is the leftmost month's reference point (or pinned)
+
+// state for pinning
+let pinnedMonthData = null; // { year, month }
+let pinnedPosition = 0; // 0=left, 1=center, 2=right
+let pinnedExtraOffset = 0; // extra scroll when pinned hits boundary
+let selectedDay = null; // { year, month, day }
+let compareMode = false;
+let compareRefDate = null; // { year, month, day }
+
+const weekDays = ['日','一','二','三','四','五','六'];
+
+function daysBetween(y1, m1, d1, y2, m2, d2) {
+  const a = new Date(y1, m1, d1);
+  const b = new Date(y2, m2, d2);
+  return Math.round((b - a) / 86400000);
+}
+
+function formatDiff(n) {
+  if (n === 0) return '同一天';
+  return n > 0 ? `還有 ${n} 天` : `已經過了 ${-n} 天`;
+}
+
+function updateComparePanel() {
+  const panel = document.getElementById('comparePanel');
+  if (!compareMode) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  if (!compareRefDate) {
+    panel.innerHTML = '請點選一個日期作為基準日';
+  } else {
+    const r = compareRefDate;
+    const refStr = `${r.year}年${r.month + 1}月${r.day}日`;
+    if (selectedDay && (selectedDay.year !== r.year || selectedDay.month !== r.month || selectedDay.day !== r.day)) {
+      const s = selectedDay;
+      const diff = daysBetween(r.year, r.month, r.day, s.year, s.month, s.day);
+      panel.innerHTML = `<span class="ref-date">基準日 ${refStr}</span> &nbsp;&mdash;&nbsp; <span class="diff-result">${formatDiff(diff)}</span>`;
+    } else {
+      panel.innerHTML = `<span class="ref-date">基準日 ${refStr}</span> &nbsp;&mdash;&nbsp; 點選另一個日期查看天數差`;
+    }
+  }
+}
+
+function showDayTooltip(el, y, m, d) {
+  if (!compareMode || !compareRefDate) return;
+  const diff = daysBetween(compareRefDate.year, compareRefDate.month, compareRefDate.day, y, m, d);
+  const tip = document.getElementById('dayTooltip');
+  tip.textContent = formatDiff(diff);
+  tip.style.display = 'block';
+  const move = (e) => {
+    let x = e.clientX + 12;
+    let y2 = e.clientY - 8;
+    if (x + 120 > window.innerWidth) x = e.clientX - 120;
+    if (y2 < 4) y2 = e.clientY + 20;
+    tip.style.left = x + 'px';
+    tip.style.top = y2 + 'px';
+  };
+  el._tooltipMove = move;
+  document.addEventListener('mousemove', move);
+}
+
+function hideDayTooltip(el) {
+  document.getElementById('dayTooltip').style.display = 'none';
+  if (el._tooltipMove) {
+    document.removeEventListener('mousemove', el._tooltipMove);
+    el._tooltipMove = null;
+  }
+}
+
+function render() {
+  const container = document.getElementById('calendarContainer');
+  container.innerHTML = '';
+
+  let monthsToRender = [];
+
+  if (pinnedMonthData) {
+    const pinnedM = pinnedMonthData.month;
+    const pinnedY = pinnedMonthData.year;
+    
+    for (let i = 0; i <= 2; i++) {
+      if (i === pinnedPosition) {
+        monthsToRender.push({ year: pinnedY, month: pinnedM });
+      } else {
+        let offset = i - pinnedPosition + pinnedExtraOffset;
+        let m = pinnedM + offset;
+        let y = pinnedY;
+        if (m > 11) { m -= 12; y++; }
+        if (m < 0) { m += 12; y--; }
+        monthsToRender.push({ year: y, month: m });
+      }
+    }
+  } else {
+    for (let i = 0; i <= 2; i++) {
+      let m = baseMonth + i;
+      let y = baseYear;
+      if (m > 11) {
+        m -= 12;
+        y++;
+      }
+      monthsToRender.push({ year: y, month: m });
+    }
+  }
+
+  monthsToRender.forEach((monthInfo, index) => {
+    const isCurrentPinned = pinnedMonthData && monthInfo.year === pinnedMonthData.year && monthInfo.month === pinnedMonthData.month;
+    container.appendChild(createMonthCard(monthInfo.year, monthInfo.month, isCurrentPinned, index));
+  });
+  const isMobile = window.innerWidth <= 768;
+  const cards = container.querySelectorAll('.month-card');
+  cards.forEach((card, i) => {
+    if (isMobile && i > 0) {
+      card.classList.add('hide-mobile');
+    } else {
+      card.classList.remove('hide-mobile');
+    }
+  });
+  updateComparePanel();
+}
+
+function createMonthCard(year, month, isPinned, index) {
+  const card = document.createElement('div');
+  card.className = 'month-card' + (isPinned ? ' pinned' : '');
+  
+  if (isPinned) {
+    const pinIcon = document.createElement('div');
+    pinIcon.className = 'pin-icon';
+    pinIcon.textContent = 'PINNED';
+    card.appendChild(pinIcon);
+  }
+
+  const header = document.createElement('div');
+  header.className = 'header';
+  header.innerHTML = `<span class="year-month">${year}年 ${month + 1}月</span>`;
+  if (isPinned) {
+    const unpinBtn = document.createElement('button');
+    unpinBtn.textContent = '取消固定';
+    unpinBtn.className = 'pin-btn active';
+    unpinBtn.onclick = (e) => {
+      e.stopPropagation();
+      pinnedMonthData = null;
+      pinnedPosition = 0;
+      pinnedExtraOffset = 0;
+      render();
+    };
+    header.appendChild(unpinBtn);
+  } else if (!isPinned) {
+      const pinBtn = document.createElement('button');
+      pinBtn.textContent = '固定此月';
+      pinBtn.className = 'pin-btn';
+      pinBtn.onclick = () => {
+         pinnedMonthData = { year, month };
+         pinnedPosition = index;
+         pinnedExtraOffset = 0;
+         render();
+      };
+      header.appendChild(pinBtn);
+  }
+
+  card.appendChild(header);
+
+  const weekdays = document.createElement('div');
+  weekdays.className = 'weekdays';
+  weekDays.forEach(day => {
+    const div = document.createElement('div');
+    div.className = 'weekday';
+    div.textContent = day;
+    weekdays.appendChild(div);
+  });
+  card.appendChild(weekdays);
+
+  const daysContainer = document.createElement('div');
+  daysContainer.className = 'days';
+
+  // Logic for rendering days
+  const firstDayIdx = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrev = new Date(year, month, 0).getDate();
+
+  // Prev month padding
+  for (let i = firstDayIdx - 1; i >= 0; i--) {
+    const d = daysInPrev - i;
+    const pm = month === 0 ? 11 : month - 1;
+    const py = month === 0 ? year - 1 : year;
+    const dayEl = document.createElement('div');
+    dayEl.className = 'day other-month';
+    dayEl.textContent = d;
+    dayEl.onclick = () => goToDate(py, pm);
+    dayEl.onmouseenter = () => showDayTooltip(dayEl, py, pm, d);
+    dayEl.onmouseleave = () => hideDayTooltip(dayEl);
+    daysContainer.appendChild(dayEl);
+  }
+
+  // Current month days
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(year, month, d).getDay();
+    const dayEl = document.createElement('div');
+    dayEl.className = 'day';
+    if (d === today.getDate() && year === today.getFullYear() && month === today.getMonth()) {
+      dayEl.classList.add('today');
+    }
+    if (selectedDay && d === selectedDay.day && year === selectedDay.year && month === selectedDay.month) {
+      dayEl.classList.add('selected');
+    } else if (dow === 0) {
+      dayEl.classList.add('sunday');
+    } else if (dow === 6) {
+      dayEl.classList.add('saturday');
+    }
+    dayEl.textContent = d;
+    dayEl.onclick = () => selectDay(year, month, d);
+    dayEl.onmouseenter = () => showDayTooltip(dayEl, year, month, d);
+    dayEl.onmouseleave = () => hideDayTooltip(dayEl);
+    daysContainer.appendChild(dayEl);
+  }
+
+  // Next month padding
+  const totalCellsFilled = firstDayIdx + daysInMonth;
+  const remaining = (7 - (totalCellsFilled % 7)) % 7;
+  for (let d = 1; d <= remaining; d++) {
+    const nm = month === 11 ? 0 : month + 1;
+    const ny = month === 11 ? year + 1 : year;
+    const dayEl = document.createElement('div');
+    dayEl.className = 'day other-month';
+    dayEl.textContent = d;
+    dayEl.onclick = () => goToDate(ny, nm);
+    dayEl.onmouseenter = () => showDayTooltip(dayEl, ny, nm, d);
+    dayEl.onmouseleave = () => hideDayTooltip(dayEl);
+    daysContainer.appendChild(dayEl);
+  }
+
+  card.appendChild(daysContainer);
+  return card;
+}
+
+function selectDay(y, m, d) {
+  if (compareMode) {
+    if (!compareRefDate) {
+      compareRefDate = { year: y, month: m, day: d };
+    }
+    selectedDay = { year: y, month: m, day: d };
+    render();
+    updateComparePanel();
+    return;
+  }
+  selectedDay = { year: y, month: m, day: d };
+  render();
+  document.getElementById('dateInfo').textContent = `✦ ${y}年${m + 1}月${d}日 星期${weekDays[new Date(y,m,d).getDay()]} ✦`;
+}
+
+function goToDate(y, m) {
+  if (pinnedMonthData) return;
+  baseYear = y;
+  baseMonth = m;
+  render();
+}
+
+document.getElementById('prev').addEventListener('click', () => {
+  if (pinnedMonthData) {
+    if (pinnedPosition < 2) {
+      pinnedPosition++;
+    } else {
+      pinnedExtraOffset--;
+    }
+  } else {
+    if (baseMonth === 0) { baseMonth = 11; baseYear--; }
+    else { baseMonth--; }
+  }
+  render();
+});
+
+document.getElementById('next').addEventListener('click', () => {
+  if (pinnedMonthData) {
+    if (pinnedPosition > 0) {
+      pinnedPosition--;
+    } else {
+      pinnedExtraOffset++;
+    }
+  } else {
+    if (baseMonth === 11) { baseMonth = 0; baseYear++; }
+    else { baseMonth++; }
+  }
+  render();
+});
+
+document.getElementById('todayBtn').addEventListener('click', () => {
+  pinnedMonthData = null;
+  pinnedPosition = 0;
+  pinnedExtraOffset = 0;
+  baseYear = today.getFullYear();
+  baseMonth = today.getMonth();
+  render();
+});
+
+document.getElementById('compareBtn').addEventListener('click', () => {
+  compareMode = !compareMode;
+  if (!compareMode) {
+    compareRefDate = null;
+  }
+  document.getElementById('compareBtn').classList.toggle('active', compareMode);
+  render();
+  updateComparePanel();
+});
+
+// Initial render
+render();
+
+// Update calendar display on resize
+window.addEventListener('resize', () => {
+  const isMobile = window.innerWidth <= 768;
+  const cards = document.querySelectorAll('.month-card');
+  cards.forEach((card, i) => {
+    if (isMobile && i > 0) {
+      card.classList.add('hide-mobile');
+    } else {
+      card.classList.remove('hide-mobile');
+    }
+  });
+});
+// Keyboard navigation
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') {
+    document.getElementById('prev').click();
+  } else if (e.key === 'ArrowRight') {
+    document.getElementById('next').click();
+  } else if (e.key === 'Enter') {
+    document.getElementById('todayBtn').click();
+  }
+});
+</script>
+</body>
+</html>
