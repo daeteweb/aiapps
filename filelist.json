@@ -25,6 +25,11 @@
     "description": "就是氣泡紙，可以開啟音樂"
   },
   {
+    "path": "apps/calendar.html",
+    "title": "時鐘月曆",
+    "description": ""
+  },
+  {
     "path": "apps/japanese-vocab.20260319.2250.claude.html",
     "title": "日文單詞記憶卡",
     "description": "目前只有N5的字彙"
