@@ -445,7 +445,7 @@
 
   <div id="dateInfo">點擊日期以選擇</div>
 
-  <div class="controls hide-mobile">
+  <div class="controls">
     <button id="prev">&#9664; 上月</button>
     <button id="todayBtn">&#9679; 今日</button>
     <button id="next">下月 &#9654;</button>
@@ -673,12 +673,13 @@ function updateComparePanel() {
   } else {
     const r = compareRefDate;
     const refStr = `${r.year}年${r.month + 1}月${r.day}日`;
+    const resetBtn = '<button id="resetRefBtn" style="margin-left:12px;background:transparent;border:1px solid #e8c86a;color:#e8c86a;font-size:11px;padding:2px 10px;border-radius:0;cursor:pointer">RESET</button>';
     if (selectedDay && (selectedDay.year !== r.year || selectedDay.month !== r.month || selectedDay.day !== r.day)) {
       const s = selectedDay;
       const diff = daysBetween(r.year, r.month, r.day, s.year, s.month, s.day);
-      panel.innerHTML = `<span class="ref-date">基準日 ${refStr}</span> &nbsp;&mdash;&nbsp; <span class="diff-result">${formatDiff(diff)}</span>`;
+      panel.innerHTML = `<span class="ref-date">基準日 ${refStr}</span>${resetBtn} &nbsp;&mdash;&nbsp; <span class="diff-result">${formatDiff(diff)}</span>`;
     } else {
-      panel.innerHTML = `<span class="ref-date">基準日 ${refStr}</span> &nbsp;&mdash;&nbsp; 點選另一個日期查看天數差`;
+      panel.innerHTML = `<span class="ref-date">基準日 ${refStr}</span>${resetBtn} &nbsp;&mdash;&nbsp; 點選另一個日期查看天數差`;
     }
   }
 }
@@ -690,23 +691,39 @@ function showDayTooltip(el, y, m, d) {
   tip.textContent = formatDiff(diff);
   tip.style.display = 'block';
   const move = (e) => {
-    let x = e.clientX + 12;
-    let y2 = e.clientY - 8;
-    if (x + 120 > window.innerWidth) x = e.clientX - 120;
-    if (y2 < 4) y2 = e.clientY + 20;
+    const cx = e.clientX ?? e.changedTouches?.[0]?.clientX ?? 0;
+    const cy = e.clientY ?? e.changedTouches?.[0]?.clientY ?? 0;
+    let x = cx + 12;
+    let y2 = cy - 8;
+    if (x + 120 > window.innerWidth) x = cx - 120;
+    if (y2 < 4) y2 = cy + 20;
     tip.style.left = x + 'px';
     tip.style.top = y2 + 'px';
   };
   el._tooltipMove = move;
   document.addEventListener('mousemove', move);
+  document.addEventListener('touchmove', move, { passive: true });
 }
 
 function hideDayTooltip(el) {
-  document.getElementById('dayTooltip').style.display = 'none';
+  const tip = document.getElementById('dayTooltip');
+  if (tip) tip.style.display = 'none';
   if (el._tooltipMove) {
     document.removeEventListener('mousemove', el._tooltipMove);
+    document.removeEventListener('touchmove', el._tooltipMove);
     el._tooltipMove = null;
   }
+}
+
+function clearAllTooltips() {
+  document.getElementById('dayTooltip').style.display = 'none';
+  document.querySelectorAll('.day, .month-card').forEach(el => {
+    if (el._tooltipMove) {
+      document.removeEventListener('mousemove', el._tooltipMove);
+      document.removeEventListener('touchmove', el._tooltipMove);
+      el._tooltipMove = null;
+    }
+  });
 }
 
 function render() {
@@ -936,10 +953,19 @@ document.getElementById('compareBtn').addEventListener('click', () => {
   compareMode = !compareMode;
   if (!compareMode) {
     compareRefDate = null;
+    clearAllTooltips();
   }
   document.getElementById('compareBtn').classList.toggle('active', compareMode);
   render();
   updateComparePanel();
+});
+
+document.addEventListener('click', (e) => {
+  if (e.target.id === 'resetRefBtn') {
+    compareRefDate = null;
+    document.querySelectorAll('.day.ref-date').forEach(el => el.classList.remove('ref-date'));
+    updateComparePanel();
+  }
 });
 
 // Initial render
@@ -957,6 +983,21 @@ window.addEventListener('resize', () => {
     }
   });
 });
+// Touch swipe for mobile
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => {
+  touchStartX = e.changedTouches[0].screenX;
+}, { passive: true });
+document.addEventListener('touchend', (e) => {
+  const diff = e.changedTouches[0].screenX - touchStartX;
+  if (Math.abs(diff) > 50) {
+    if (diff > 0) {
+      document.getElementById('prev').click();
+    } else {
+      document.getElementById('next').click();
+    }
+  }
+}, { passive: true });
 // Keyboard navigation
 document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') {
