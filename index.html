@@ -23,6 +23,8 @@
             --badge-text: #fff;
             --overlay-bg: rgba(0,0,0,0.35);
             --transition: 0.28s cubic-bezier(.4,0,.2,1);
+            --gold-line: linear-gradient(180deg,#f5b300,#f2c94c);
+            --gold-color: #f5b300;
         }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -183,39 +185,52 @@
         }
         .tooltip-close-btn:hover { color: #fff; }
 
-        /* ── 漢堡 Tab ── */
-        #menu-tab {
+        /* ── 左側金線與箭頭按鈕（改） ── */
+        /* container 放整條高度的線與按鈕，線不會攔截事件（pointer-events:none）*/
+        #menu-edge {
             position: fixed;
             left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 150;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            width: var(--tab-width);
-            padding: 14px 0;
+            top: 0;
+            height: 100vh;
+            width: 32px; /* a bit of space to place button */
+            z-index: 250;
+            pointer-events: none; /* allow clicks through except the button */
+        }
+        /* 細線（靠最左） */
+        #edge-line {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--gold-line);
+            box-shadow: 0 0 6px rgba(245,179,0,0.12);
+            pointer-events: none;
+        }
+        /* 圓形箭頭按鈕，置於從上方 20% 的位置 */
+        #menu-tab {
+            position: absolute;
+            left: 12px; /* place button slightly over the line */
+            top: 20%;
+            transform: translate(-50%, -50%);
+            z-index: 260;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
             background: var(--tab-bg);
             color: var(--tab-text);
-            border-radius: 0 10px 10px 0;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
-            box-shadow: 2px 0 12px rgba(0,0,0,0.2);
-            transition: background var(--transition), color var(--transition), opacity var(--transition);
+            pointer-events: auto; /* enable clicking */
             user-select: none;
+            transition: background var(--transition), color var(--transition), transform 0.12s;
+            box-shadow: 0 6px 22px rgba(0,0,0,0.15);
         }
-        #menu-tab:hover { background: var(--accent-dark); color: #fff; }
-        #menu-tab.hidden { opacity: 0; pointer-events: none; }
-
-        .tab-icon { font-size: 1.1rem; line-height: 1; }
-        .tab-label {
-            writing-mode: vertical-rl;
-            text-orientation: upright;
-            font-size: 0.72rem;
-            letter-spacing: 0.12em;
-            font-weight: 600;
-        }
+        #menu-tab:hover { background: var(--accent-dark); color: #fff; transform: translate(-50%, -50%) scale(1.03); }
 
         /* ── 主頁面 ── */
         #main-wrap {
@@ -264,6 +279,9 @@
         @media (max-width: 768px) {
             #main { display: none; }
             #readme-view { padding: 24px 5vw; }
+            /* on small screens keep the gold line and button visible but slightly smaller */
+            #menu-edge { width: 28px; }
+            #menu-tab { left: 10px; width: 34px; height: 34px; }
         }
     </style>
 </head>
@@ -285,10 +303,10 @@
     <div id="menu">讀取中...</div>
 </div>
 
-<!-- 漢堡 Tab -->
-<div id="menu-tab">
-    <span class="tab-icon">☰</span>
-    <span class="tab-label">選單</span>
+<!-- 左側金色細線與箭頭按鈕（常駐） -->
+<div id="menu-edge" aria-hidden="false">
+    <div id="edge-line" aria-hidden="true"></div>
+    <button id="menu-tab" title="選單" aria-label="選單" aria-expanded="false">→</button>
 </div>
 
 <!-- 主視窗 -->
@@ -309,16 +327,28 @@
     function openSidebar() {
         sidebar.classList.add('open');
         overlay.classList.add('show');
-        menuTab.classList.add('hidden');
+        // keep menuTab visible (常駐). update arrow to "開啟" 狀態
+        menuTab.textContent = '←';
+        menuTab.setAttribute('aria-expanded', 'true');
     }
     function closeSidebar() {
         sidebar.classList.remove('open');
         overlay.classList.remove('show');
-        menuTab.classList.remove('hidden');
+        // keep menuTab visible. update arrow to "關閉" 狀態
+        menuTab.textContent = '→';
+        menuTab.setAttribute('aria-expanded', 'false');
         hideTooltip();
     }
 
-    menuTab.addEventListener('click', openSidebar);
+    // 切換行為：若 sidebar 已開就關閉，否則開啟
+    menuTab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (sidebar.classList.contains('open')) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
     closeBtn.addEventListener('click', closeSidebar);
     overlay.addEventListener('click', closeSidebar);
 
@@ -468,6 +498,10 @@
             if (!isMobile()) showApp('apps/calendar.html');
         }
     }
+
+    // 初始箭頭狀態（關閉）
+    menuTab.textContent = '→';
+    menuTab.setAttribute('aria-expanded', 'false');
 
     loadMenu();
 </script>
