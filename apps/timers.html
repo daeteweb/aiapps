@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多功能計時器</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;
+  --bg-card:#14141f;
+  --bg-card-hover:#1c1c2e;
+  --bg-input:#0e0e18;
+  --border:#252535;
+  --border-hover:#3a3a50;
+  --text:#e8e8f0;
+  --text-dim:#808098;
+  --text-muted:#505068;
+  --accent:#6c63ff;
+  --accent-hover:#7b73ff;
+  --accent-dim:rgba(108,99,255,0.15);
+  --success:#00d9a6;
+  --success-dim:rgba(0,217,166,0.12);
+  --warning:#ffa502;
+  --warning-dim:rgba(255,165,2,0.12);
+  --danger:#ff4757;
+  --danger-dim:rgba(255,71,87,0.12);
+  --radius:14px;
+  --radius-sm:8px;
+  --radius-pill:99px;
+  --shadow:0 4px 24px rgba(0,0,0,0.4);
+  --glow-accent:0 0 20px rgba(108,99,255,0.15);
+  --font:'Microsoft JhengHei','微軟正黑體','Segoe UI',system-ui,sans-serif;
+  --transition:0.25s cubic-bezier(.4,0,.2,1);
+}
+html,body{height:100%}
+body{
+  background:radial-gradient(ellipse at 30% 20%,#121025 0%,var(--bg) 60%);
+  color:var(--text);
+  font-family:var(--font);
+  line-height:1.5;
+  display:flex;
+  justify-content:center;
+  padding:20px;
+  min-height:100vh;
+}
+#app{
+  width:100%;
+  max-width:1100px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+/* header */
+header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px;
+  padding:14px 20px;
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  position:relative;
+  overflow:hidden;
+}
+header::before{
+  content:'';
+  position:absolute;inset:0;
+  background:linear-gradient(135deg,var(--accent-dim),transparent 50%);
+  pointer-events:none;
+}
+header h1{
+  font-size:22px;
+  font-weight:800;
+  letter-spacing:1px;
+  position:relative;
+  background:linear-gradient(135deg,var(--accent),var(--success));
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.header-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.group-counter{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background:var(--bg-input);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:4px;
+}
+.group-counter span{
+  min-width:24px;
+  text-align:center;
+  font-variant-numeric:tabular-nums;
+  font-weight:600;
+  color:var(--accent);
+}
+.btn-icon{
+  width:34px;height:34px;
+  display:flex;align-items:center;justify-content:center;
+  background:transparent;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  font-size:18px;
+  cursor:pointer;
+  transition:var(--transition);
+}
+.btn-icon:hover{background:var(--bg-card-hover);border-color:var(--border-hover)}
+.btn-icon:disabled{opacity:.3;cursor:not-allowed}
+.btn{
+  padding:7px 16px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:var(--bg-card);
+  color:var(--text);
+  font-size:13px;
+  cursor:pointer;
+  transition:var(--transition);
+  font-family:var(--font);
+  font-weight:500;
+  letter-spacing:.3px;
+  user-select:none;
+  position:relative;
+  overflow:hidden;
+}
+.btn:active{transform:scale(.96)}
+.btn:hover{background:var(--bg-card-hover);border-color:var(--border-hover)}
+.btn-primary{
+  background:linear-gradient(135deg,var(--accent),#7c5cff);
+  border-color:var(--accent);
+  color:#fff;
+  font-weight:700;
+}
+.btn-primary:hover{background:linear-gradient(135deg,var(--accent-hover),#8c6cff);box-shadow:0 0 16px rgba(108,99,255,0.3)}
+.btn-primary:active{background:var(--accent)}
+.btn-danger{
+  background:var(--danger-dim);
+  border-color:transparent;
+  color:var(--danger);
+  font-weight:600;
+}
+.btn-danger:hover{background:rgba(255,71,87,0.2);box-shadow:0 0 12px rgba(255,71,87,0.15)}
+.btn-danger:active{background:rgba(255,71,87,0.3)}
+.btn-secondary{
+  background:var(--bg-input);
+  border-color:var(--border);
+  color:var(--text-dim);
+}
+.btn-secondary:hover{background:var(--bg-card-hover);color:var(--text);border-color:var(--border-hover)}
+.btn-outline{
+  background:transparent;
+  border-color:var(--border);
+  color:var(--text-dim);
+  font-size:13px;
+}
+.btn-outline:hover{background:var(--bg-card-hover);color:var(--text);border-color:var(--border-hover)}
+.btn-lap{
+  background:var(--accent-dim);
+  border-color:var(--accent);
+  color:var(--accent);
+  font-weight:600;
+}
+.btn-lap:hover{background:rgba(108,99,255,0.25);box-shadow:0 0 12px rgba(108,99,255,0.15)}
+.btn-lap:active{background:rgba(108,99,255,0.35)}
+.btn-sm{padding:5px 10px;font-size:12px}
+/* cards grid */
+#cardsContainer{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:14px;
+  flex:1;
+}
+.card{
+  background:linear-gradient(170deg,var(--bg-card),var(--bg-input));
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  transition:border-color var(--transition),box-shadow var(--transition),transform var(--transition);
+}
+.card:hover{border-color:var(--border-hover);box-shadow:var(--shadow),var(--glow-accent)}
+.card.flash{
+  animation:cardFlash .6s ease-in-out 3;
+  border-color:var(--danger);
+  box-shadow:0 0 30px rgba(255,71,87,0.3);
+}
+@keyframes cardFlash{
+  0%,100%{background:var(--bg-card)}
+  50%{background:var(--danger-dim)}
+}
+.card-header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 14px;
+  border-bottom:1px solid var(--border);
+  background:rgba(255,255,255,.02);
+}
+.btn-mode{
+  width:38px;height:28px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent-dim);
+  border:1px solid var(--accent);
+  border-radius:var(--radius-pill);
+  font-size:20px;
+  cursor:pointer;
+  transition:var(--transition);
+  flex-shrink:0;
+  position:relative;
+}
+.btn-mode:hover{background:rgba(108,99,255,0.25);border-color:var(--accent-hover);box-shadow:0 0 12px rgba(108,99,255,0.2)}
+.mode-icon{color:var(--accent);font-weight:800;font-size:12px;letter-spacing:.5px}
+.card-label{
+  flex:1;
+  font-weight:600;
+  font-size:14px;
+  padding:4px 6px;
+  border-radius:4px;
+  cursor:text;
+  transition:var(--transition);
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.card-label:hover{background:var(--bg-input)}
+.card-label:focus{
+  outline:2px solid var(--accent);
+  outline-offset:-2px;
+  background:var(--bg-input);
+  box-shadow:0 0 0 4px var(--accent-dim);
+}
+.card-number{
+  font-size:11px;
+  color:var(--text-muted);
+  background:var(--bg-input);
+  padding:2px 10px;
+  border-radius:var(--radius-pill);
+  flex-shrink:0;
+  font-weight:700;
+  letter-spacing:.3px;
+}
+.card-body{
+  padding:12px 14px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+/* progress bar */
+.progress-bar{
+  height:4px;
+  background:var(--bg-input);
+  border-radius:2px;
+  overflow:hidden;
+}
+.progress-fill{
+  height:100%;
+  width:0%;
+  border-radius:2px;
+  transition:width .15s linear;
+  background:linear-gradient(90deg,var(--success),#00c994);
+}
+.progress-fill.warning{background:linear-gradient(90deg,var(--warning),#e89600)}
+.progress-fill.danger{background:linear-gradient(90deg,#ff7a2a,var(--danger))}
+/* time display */
+.time-display{
+  text-align:center;
+  font-size:40px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:3px;
+  padding:2px 0;
+  line-height:1.1;
+  font-family:'Microsoft JhengHei','微軟正黑體',sans-serif;
+  min-height:50px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.time-display.paused{opacity:.55}
+.time-display.done{color:var(--danger);animation:pulseText 1s ease-in-out infinite;text-shadow:0 0 20px rgba(255,71,87,.4)}
+@keyframes pulseText{
+  0%,100%{opacity:1}
+  50%{opacity:.3}
+}
+.time-display.waiting{color:var(--warning)}
+.time-display .sub{font-size:16px;color:var(--text-dim);margin-left:2px}
+/* settings area */
+.settings-area{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:8px 10px;
+  background:var(--bg-input);
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+}
+.settings-area.hidden{display:none}
+.time-inputs{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+}
+.time-inputs input{
+  width:52px;
+  padding:4px 2px;
+  text-align:center;
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  font-size:18px;
+  font-weight:700;
+  font-family:'Microsoft JhengHei','微軟正黑體',sans-serif;
+  transition:var(--transition);
+  font-variant-numeric:tabular-nums;
+}
+.time-inputs input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.time-inputs .sep{
+  font-size:16px;
+  font-weight:700;
+  color:var(--text-muted);
+  padding:0 1px;
+}
+.end-action-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.end-action-row select{
+  flex:1;
+  padding:6px 8px;
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  font-size:13px;
+  cursor:pointer;
+  font-family:var(--font);
+  transition:var(--transition);
+}
+.end-action-row select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.restart-delay-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding-left:2px;
+  font-size:13px;
+  color:var(--text-dim);
+}
+.restart-delay-row.hidden{display:none}
+.restart-delay-row input{
+  width:50px;
+  padding:4px 2px;
+  text-align:center;
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  font-size:14px;
+  font-weight:700;
+  font-family:var(--font);
+  transition:var(--transition);
+}
+.restart-delay-row input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+/* controls */
+.controls{
+  display:flex;
+  gap:8px;
+  justify-content:center;
+}
+
+.controls .btn{min-width:76px;justify-content:center;display:flex;align-items:center;gap:4px;padding:6px 10px;font-size:12px}
+.controls .btn.hidden{display:none}
+.controls .btn:disabled{opacity:.4;cursor:not-allowed}
+/* stopwatch controls extra */
+.restart-hint{
+  text-align:center;
+  font-size:13px;
+  padding:5px 10px;
+  border-radius:var(--radius-sm);
+  background:var(--warning-dim);
+  color:var(--warning);
+  font-weight:600;
+  letter-spacing:.3px;
+}
+/* laps */
+.laps-container{
+  max-height:140px;
+  overflow-y:auto;
+  font-size:12px;
+  margin-top:2px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:var(--bg-input);
+}
+.laps-container::-webkit-scrollbar{width:4px}
+.laps-container::-webkit-scrollbar-track{background:transparent}
+.laps-container::-webkit-scrollbar-thumb{background:var(--border-hover);border-radius:2px}
+.laps-header{
+  padding:4px 10px;
+  color:var(--text-muted);
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:1.5px;
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;
+  background:var(--bg-input);
+}
+.lap-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  transition:background var(--transition);
+}
+.lap-row:first-of-type{background:var(--success-dim)}
+.lap-row:hover{background:var(--bg-card-hover)}
+.lap-row+.lap-row{border-top:1px solid var(--border)}
+.lap-num{color:var(--text-dim);min-width:30px;font-size:11px;font-weight:600}
+.lap-time{flex:1;text-align:right;font-weight:700;letter-spacing:.5px}
+.lap-diff{color:var(--accent);min-width:60px;text-align:right;font-size:11px;font-weight:600}
+/* empty state */
+.empty-msg{
+  text-align:center;
+  padding:60px 20px;
+  color:var(--text-muted);
+  font-size:16px;
+}
+
+/* responsive */
+@media(max-width:768px){
+  body{padding:10px}
+  #app{gap:10px}
+  header{padding:10px 14px}
+  header h1{font-size:16px}
+  header::before{opacity:.5}
+  .header-actions{gap:6px}
+  .btn{padding:5px 10px;font-size:12px}
+  #cardsContainer{grid-template-columns:1fr;gap:10px}
+  .time-display{font-size:32px;min-height:42px}
+  .time-inputs input{width:44px;font-size:16px;padding:3px 2px}
+  .controls .btn{min-width:64px;font-size:11px;padding:5px 8px}
+  .card-body{padding:10px 12px}
+  .card-header{padding:8px 12px}
+}
+@media(max-width:400px){
+  .time-display{font-size:26px}
+  .time-inputs input{width:38px;font-size:14px}
+  .card-body{padding:8px 10px}
+  .card-header{padding:6px 10px}
+  header h1{font-size:14px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>⏱ 多功能計時器</h1>
+    <div class="header-actions">
+      <button class="btn btn-outline" id="btnExport">📤 匯出</button>
+      <button class="btn btn-outline" id="btnImport">📥 匯入</button>
+      <input type="file" id="importFileInput" accept=".json" hidden>
+      <div class="group-counter">
+        <button class="btn-icon" id="btnRemoveGroup" title="減少一組">−</button>
+        <span id="groupCountDisplay">3</span>
+        <button class="btn-icon" id="btnAddGroup" title="增加一組">+</button>
+      </div>
+    </div>
+  </header>
+  <div id="cardsContainer"></div>
+</div>
+
+<script>
+const STORAGE_KEY = 'timers_app_data';
+const MIN_GROUPS = 1;
+const MAX_GROUPS = 10;
+const UPDATE_INTERVAL = 100;
+
+// ─── State ───────────────────────────────────────────
+let groups = [];
+let runtime = {};  // groupId -> timer runtime state
+let updateTimerId = null;
+let nextGroupId = 0;
+let audioCtx = null;
+
+function defaultGroup(id, index) {
+  return {
+    id,
+    label: `計時器 ${index + 1}`,
+    mode: 'countdown',  // 'countdown' | 'stopwatch'
+    countdown: {
+      hours: 0,
+      minutes: 5,
+      seconds: 0,
+      endAction: 'stop',  // 'stop' | 'restart'
+      restartDelay: 5,
+    },
+  };
+}
+
+function defaultRuntime(id) {
+  return {
+    status: 'idle',  // idle | running | paused | done | restart-wait
+    remainingMs: 0,
+    totalMs: 0,
+    endTime: null,
+    pausedRemainingMs: null,
+    restartWaitUntil: null,
+    restartDelaySec: 0,
+    // stopwatch
+    swElapsed: 0,
+    swStartTime: null,
+    swPausedElapsed: 0,
+    swLaps: [],
+    // flash
+    flashUntil: 0,
+  };
+}
+
+// ─── Sound ───────────────────────────────────────────
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playAlarm() {
+  try {
+    const ctx = getAudioCtx();
+    const t = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const g1 = ctx.createGain();
+    osc1.connect(g1); g1.connect(ctx.destination);
+    osc1.frequency.value = 880; osc1.type = 'sine';
+    g1.gain.setValueAtTime(0.25, t);
+    g1.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+    osc1.start(t); osc1.stop(t + 0.4);
+
+    const osc2 = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    osc2.connect(g2); g2.connect(ctx.destination);
+    osc2.frequency.value = 660; osc2.type = 'sine';
+    g2.gain.setValueAtTime(0.25, t + 0.45);
+    g2.gain.exponentialRampToValueAtTime(0.01, t + 0.85);
+    osc2.start(t + 0.45); osc2.stop(t + 0.85);
+  } catch(e) { /* silent */ }
+}
+
+// ─── Storage ─────────────────────────────────────────
+function saveState() {
+  const data = {
+    version: 1,
+    nextGroupId,
+    groups: groups.map(g => ({
+      id: g.id, label: g.label, mode: g.mode,
+      countdown: { ...g.countdown },
+    })),
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch(e) { /* quota exceeded */ }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.groups)) return false;
+    nextGroupId = data.nextGroupId || 0;
+    groups = data.groups.map(g => ({
+      id: g.id,
+      label: g.label || `計時器 ${g.id + 1}`,
+      mode: g.mode === 'stopwatch' ? 'stopwatch' : 'countdown',
+      countdown: {
+        hours: g.countdown?.hours ?? 0,
+        minutes: g.countdown?.minutes ?? 5,
+        seconds: g.countdown?.seconds ?? 0,
+        endAction: g.countdown?.endAction === 'restart' ? 'restart' : 'stop',
+        restartDelay: g.countdown?.restartDelay ?? 5,
+      },
+    }));
+    return true;
+  } catch(e) { return false; }
+}
+
+function initGroups() {
+  if (!loadState()) {
+    groups = [];
+    for (let i = 0; i < 3; i++) {
+      groups.push(defaultGroup(nextGroupId++, i));
+    }
+  }
+  // ensure at least one
+  if (groups.length === 0) {
+    groups.push(defaultGroup(nextGroupId++, 0));
+  }
+  // ensure each group has runtime
+  groups.forEach(g => {
+    if (!runtime[g.id]) runtime[g.id] = defaultRuntime(g.id);
+  });
+  saveState();
+}
+
+// ─── Export / Import ─────────────────────────────────
+function exportData() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    nextGroupId,
+    groups: groups.map(g => ({
+      id: g.id, label: g.label, mode: g.mode,
+      countdown: { ...g.countdown },
+    })),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `timers-backup-${Date.now()}.json`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function importData(jsonStr) {
+  try {
+    const data = JSON.parse(jsonStr);
+    if (!data || !Array.isArray(data.groups) || data.groups.length === 0) {
+      alert('無效的匯入檔案');
+      return;
+    }
+    if (data.groups.length < MIN_GROUPS || data.groups.length > MAX_GROUPS) {
+      alert(`組數必須在 ${MIN_GROUPS} 到 ${MAX_GROUPS} 之間`);
+      return;
+    }
+    // Stop all timers
+    groups.forEach(g => { runtime[g.id] = defaultRuntime(g.id); });
+    nextGroupId = data.nextGroupId || 0;
+    groups = data.groups.map(g => ({
+      id: g.id,
+      label: g.label || `計時器 ${g.id + 1}`,
+      mode: g.mode === 'stopwatch' ? 'stopwatch' : 'countdown',
+      countdown: {
+        hours: g.countdown?.hours ?? 0,
+        minutes: g.countdown?.minutes ?? 5,
+        seconds: g.countdown?.seconds ?? 0,
+        endAction: g.countdown?.endAction === 'restart' ? 'restart' : 'stop',
+        restartDelay: g.countdown?.restartDelay ?? 5,
+      },
+    }));
+    groups.forEach(g => { runtime[g.id] = defaultRuntime(g.id); });
+    saveState();
+    renderAll();
+  } catch(e) {
+    alert('匯入失敗：檔案格式錯誤');
+  }
+}
+
+// ─── Formatting ──────────────────────────────────────
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function formatTime(ms, showSub = false) {
+  if (ms <= 0) return showSub ? '00:00:00.0' : '00:00:00';
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (showSub) {
+    const ds = Math.floor((ms % 1000) / 100);
+    return `${pad2(h)}:${pad2(m)}:${pad2(s)}.<span class="sub">${ds}</span>`;
+  }
+  return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+}
+
+function getCountdownMs(g) {
+  return (g.countdown.hours * 3600 + g.countdown.minutes * 60 + g.countdown.seconds) * 1000;
+}
+
+// ─── Timer Logic ─────────────────────────────────────
+function startTimer(id) {
+  const g = groups.find(x => x.id === id);
+  const rt = runtime[id];
+  if (!g || !rt) return;
+
+  if (g.mode === 'countdown') {
+    const totalMs = getCountdownMs(g);
+    if (totalMs <= 0) { alert('請設定倒數時間'); return; }
+    rt.totalMs = totalMs;
+    rt.remainingMs = totalMs;
+    rt.endTime = Date.now() + totalMs;
+    rt.status = 'running';
+    rt.flashUntil = 0;
+    g.mode = 'countdown';
+  } else {
+    // stopwatch
+    rt.swStartTime = Date.now();
+    rt.swElapsed = rt.swPausedElapsed || 0;
+    rt.status = 'running';
+  }
+  saveState();
+  renderAll();
+}
+
+function pauseTimer(id) {
+  const g = groups.find(x => x.id === id);
+  const rt = runtime[id];
+  if (!g || !rt || rt.status !== 'running') return;
+
+  if (g.mode === 'countdown') {
+    rt.pausedRemainingMs = Math.max(0, rt.endTime - Date.now());
+    rt.status = 'paused';
+  } else {
+    rt.swPausedElapsed = rt.swElapsed + (Date.now() - rt.swStartTime);
+    rt.swStartTime = null;
+    rt.status = 'paused';
+  }
+  saveState();
+  renderAll();
+}
+
+function resumeTimer(id) {
+  const g = groups.find(x => x.id === id);
+  const rt = runtime[id];
+  if (!g || !rt || rt.status !== 'paused') return;
+
+  if (g.mode === 'countdown') {
+    rt.endTime = Date.now() + (rt.pausedRemainingMs || rt.totalMs);
+    rt.status = 'running';
+  } else {
+    rt.swStartTime = Date.now();
+    rt.status = 'running';
+  }
+  renderAll();
+}
+
+function addLap(id) {
+  const g = groups.find(x => x.id === id);
+  const rt = runtime[id];
+  if (!g || !rt || g.mode !== 'stopwatch' || rt.status !== 'running') return;
+  const cur = (rt.swPausedElapsed || 0) + (rt.swStartTime ? Date.now() - rt.swStartTime : 0);
+  const prev = rt.swLaps.length > 0 ? rt.swLaps[rt.swLaps.length - 1].time : 0;
+  rt.swLaps.push({ time: cur, diff: cur - prev });
+  renderAll();
+}
+
+function resetTimer(id) {
+  const g = groups.find(x => x.id === id);
+  const rt = runtime[id];
+  if (!g || !rt) return;
+
+  if (g.mode === 'countdown') {
+    rt.status = 'idle';
+    rt.remainingMs = 0;
+    rt.totalMs = 0;
+    rt.endTime = null;
+    rt.pausedRemainingMs = null;
+    rt.restartWaitUntil = null;
+    rt.flashUntil = 0;
+  } else {
+    rt.status = 'idle';
+    rt.swElapsed = 0;
+    rt.swStartTime = null;
+    rt.swPausedElapsed = 0;
+    rt.swLaps = [];
+    rt.flashUntil = 0;
+  }
+  renderAll();
+}
+
+function toggleMode(id) {
+  const g = groups.find(x => x.id === id);
+  const rt = runtime[id];
+  if (!g || !rt) return;
+  if (rt.status !== 'idle') {
+    // force reset
+    resetTimer(id);
+  }
+  g.mode = g.mode === 'countdown' ? 'stopwatch' : 'countdown';
+  if (g.mode === 'countdown') {
+    // ensure countdown has default values
+    if (getCountdownMs(g) <= 0) g.countdown.minutes = 5;
+  }
+  saveState();
+  renderAll();
+}
+
+function cancelRestart(id) {
+  const rt = runtime[id];
+  if (!rt || rt.status !== 'restart-wait') return;
+  rt.status = 'idle';
+  rt.restartWaitUntil = null;
+  rt.flashUntil = 0;
+  renderAll();
+}
+
+// ─── Update Loop ─────────────────────────────────────
+function updateTimers() {
+  const now = Date.now();
+  let changed = false;
+
+  groups.forEach(g => {
+    const rt = runtime[g.id];
+    if (!rt) return;
+
+    if (g.mode === 'countdown') {
+      if (rt.status === 'running') {
+        const remaining = Math.max(0, rt.endTime - now);
+        rt.remainingMs = remaining;
+
+        if (remaining <= 0) {
+          // Time's up
+          rt.remainingMs = 0;
+          playAlarm();
+
+          if (g.countdown.endAction === 'restart') {
+            rt.status = 'restart-wait';
+            rt.restartWaitUntil = now + g.countdown.restartDelay * 1000;
+            rt.restartDelaySec = g.countdown.restartDelay;
+          } else {
+            rt.status = 'done';
+            rt.flashUntil = now + 2000;
+          }
+          changed = true;
+        }
+      } else if (rt.status === 'restart-wait') {
+        if (rt.restartWaitUntil && now >= rt.restartWaitUntil) {
+          // Restart countdown
+          const totalMs = getCountdownMs(g);
+          if (totalMs > 0) {
+            rt.totalMs = totalMs;
+            rt.remainingMs = totalMs;
+            rt.endTime = now + totalMs;
+            rt.status = 'running';
+            rt.restartWaitUntil = null;
+            rt.flashUntil = 0;
+          } else {
+            rt.status = 'idle';
+            rt.restartWaitUntil = null;
+          }
+          changed = true;
+        }
+      } else if (rt.status === 'done') {
+        if (rt.flashUntil && now > rt.flashUntil) {
+          rt.flashUntil = 0;
+          changed = true;
+        }
+      }
+    } else {
+      // stopwatch
+      if (rt.status === 'running') {
+        rt.swElapsed = (rt.swPausedElapsed || 0) + (now - rt.swStartTime);
+      }
+    }
+  });
+
+  if (changed) {
+    saveState();
+  }
+  updateAllDisplays();
+}
+
+// ─── DOM Rendering ───────────────────────────────────
+function renderAll() {
+  const container = document.getElementById('cardsContainer');
+  container.innerHTML = '';
+  groups.forEach(g => renderCard(container, g));
+  updateHeaderControls();
+  updateAllDisplays();
+}
+
+function renderCard(container, g) {
+  const rt = runtime[g.id] || defaultRuntime(g.id);
+  if (!runtime[g.id]) runtime[g.id] = rt;
+
+  const card = document.createElement('div');
+  card.className = 'card' + (rt.flashUntil && Date.now() < rt.flashUntil ? ' flash' : '');
+  card.dataset.id = g.id;
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'card-header';
+
+  const modeBtn = document.createElement('button');
+  modeBtn.className = 'btn-mode';
+  modeBtn.innerHTML = g.mode === 'countdown' ? '<span class="mode-icon">倒數</span>' : '<span class="mode-icon">碼錶</span>';
+  modeBtn.title = g.mode === 'countdown' ? '切換為碼錶模式' : '切換為倒數模式';
+  modeBtn.addEventListener('click', () => toggleMode(g.id));
+
+  const label = document.createElement('span');
+  label.className = 'card-label';
+  label.textContent = g.label;
+  label.contentEditable = true;
+  label.addEventListener('blur', () => {
+    const val = label.textContent.trim();
+    if (val) { g.label = val; saveState(); }
+    else label.textContent = g.label;
+  });
+  label.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); label.blur(); }
+  });
+
+  const num = document.createElement('span');
+  num.className = 'card-number';
+  num.textContent = `#${groups.indexOf(g) + 1}`;
+
+  header.append(modeBtn, label, num);
+  card.appendChild(header);
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'card-body';
+
+  // Progress bar (countdown only)
+  const progressWrap = document.createElement('div');
+  progressWrap.className = 'progress-bar';
+  const progressFill = document.createElement('div');
+  progressFill.className = 'progress-fill';
+  progressFill.id = `pf-${g.id}`;
+  progressWrap.appendChild(progressFill);
+  if (g.mode === 'stopwatch') progressWrap.style.display = 'none';
+  body.appendChild(progressWrap);
+
+  // Time display
+  const timeDisplay = document.createElement('div');
+  timeDisplay.className = 'time-display';
+  timeDisplay.id = `td-${g.id}`;
+  body.appendChild(timeDisplay);
+
+  // Settings area (countdown idle only)
+  const settings = document.createElement('div');
+  settings.className = 'settings-area' + (g.mode !== 'countdown' || rt.status !== 'idle' ? ' hidden' : '');
+  settings.id = `s-${g.id}`;
+
+  // Time inputs
+  const timeInputs = document.createElement('div');
+  timeInputs.className = 'time-inputs';
+  const ih = document.createElement('input');
+  ih.type = 'number'; ih.min = 0; ih.max = 99; ih.value = g.countdown.hours;
+  ih.dataset.field = 'hours';
+  const sep1 = document.createElement('span'); sep1.className = 'sep'; sep1.textContent = ':';
+  const im = document.createElement('input');
+  im.type = 'number'; im.min = 0; im.max = 59; im.value = g.countdown.minutes;
+  im.dataset.field = 'minutes';
+  const sep2 = document.createElement('span'); sep2.className = 'sep'; sep2.textContent = ':';
+  const is = document.createElement('input');
+  is.type = 'number'; is.min = 0; is.max = 59; is.value = g.countdown.seconds;
+  is.dataset.field = 'seconds';
+  timeInputs.append(ih, sep1, im, sep2, is);
+
+  // End action
+  const endActionRow = document.createElement('div');
+  endActionRow.className = 'end-action-row';
+  const select = document.createElement('select');
+  select.id = `ea-${g.id}`;
+  const optStop = document.createElement('option'); optStop.value = 'stop'; optStop.textContent = '時間到了就停止';
+  const optRestart = document.createElement('option'); optRestart.value = 'restart'; optRestart.textContent = '時間到了自動重啟';
+  select.append(optStop, optRestart);
+  select.value = g.countdown.endAction;
+  endActionRow.appendChild(select);
+
+  // Restart delay
+  const delayRow = document.createElement('div');
+  delayRow.className = 'restart-delay-row' + (g.countdown.endAction !== 'restart' ? ' hidden' : '');
+  delayRow.id = `dr-${g.id}`;
+  const dlLabel = document.createElement('span'); dlLabel.textContent = '重啟延遲：';
+  const dlInput = document.createElement('input');
+  dlInput.type = 'number'; dlInput.min = 1; dlInput.max = 99; dlInput.value = g.countdown.restartDelay;
+  dlInput.id = `dl-${g.id}`;
+  const dlUnit = document.createElement('span'); dlUnit.textContent = '秒';
+  delayRow.append(dlLabel, dlInput, dlUnit);
+
+  // Save settings on change
+  const saveSettings = () => {
+    g.countdown.hours = Math.min(99, Math.max(0, parseInt(ih.value) || 0));
+    g.countdown.minutes = Math.min(59, Math.max(0, parseInt(im.value) || 0));
+    g.countdown.seconds = Math.min(59, Math.max(0, parseInt(is.value) || 0));
+    g.countdown.endAction = select.value;
+    g.countdown.restartDelay = Math.min(99, Math.max(1, parseInt(dlInput.value) || 5));
+    delayRow.classList.toggle('hidden', g.countdown.endAction !== 'restart');
+    saveState();
+  };
+  ih.addEventListener('input', saveSettings);
+  im.addEventListener('input', saveSettings);
+  is.addEventListener('input', saveSettings);
+  select.addEventListener('change', saveSettings);
+  dlInput.addEventListener('input', saveSettings);
+
+  settings.append(timeInputs, endActionRow, delayRow);
+  body.appendChild(settings);
+
+  // Controls
+  const controls = document.createElement('div');
+  controls.className = 'controls';
+  controls.id = `c-${g.id}`;
+
+  // Restart hint (shows during restart-wait)
+  const hint = document.createElement('div');
+  hint.className = 'restart-hint';
+  hint.id = `rh-${g.id}`;
+  hint.style.display = 'none';
+  body.appendChild(hint);
+
+  if (g.mode === 'countdown') {
+    const btnStart = document.createElement('button');
+    btnStart.className = 'btn btn-primary';
+    btnStart.textContent = '▶ 開始';
+    btnStart.dataset.action = 'start';
+
+    const btnPause = document.createElement('button');
+    btnPause.className = 'btn btn-secondary';
+    btnPause.textContent = '⏸ 暫停';
+    btnPause.dataset.action = 'pause';
+
+    const btnReset = document.createElement('button');
+    btnReset.className = 'btn btn-danger';
+    btnReset.textContent = '↺ 重置';
+    btnReset.dataset.action = 'reset';
+
+    controls.append(btnStart, btnPause, btnReset);
+
+    btnStart.addEventListener('click', () => {
+      if (rt.status === 'paused') resumeTimer(g.id);
+      else startTimer(g.id);
+    });
+    btnPause.addEventListener('click', () => pauseTimer(g.id));
+    btnReset.addEventListener('click', () => resetTimer(g.id));
+  } else {
+    // Stopwatch
+    const btnStart = document.createElement('button');
+    btnStart.className = 'btn btn-primary';
+    btnStart.textContent = '▶ 開始';
+    btnStart.dataset.action = 'start';
+
+    const btnPause = document.createElement('button');
+    btnPause.className = 'btn btn-secondary';
+    btnPause.textContent = '⏸ 暫停';
+    btnPause.dataset.action = 'pause';
+
+    const btnLap = document.createElement('button');
+    btnLap.className = 'btn btn-lap';
+    btnLap.textContent = '⏱ Laps';
+    btnLap.dataset.action = 'lap';
+
+    const btnStop = document.createElement('button');
+    btnStop.className = 'btn btn-danger';
+    btnStop.textContent = '⏹ 停止';
+    btnStop.dataset.action = 'reset';
+
+    controls.append(btnStart, btnPause, btnLap, btnStop);
+
+    btnStart.addEventListener('click', () => {
+      if (rt.status === 'paused') resumeTimer(g.id);
+      else startTimer(g.id);
+    });
+    btnPause.addEventListener('click', () => pauseTimer(g.id));
+    btnLap.addEventListener('click', () => addLap(g.id));
+    btnStop.addEventListener('click', () => resetTimer(g.id));
+  }
+
+  body.appendChild(controls);
+
+  // Laps container (stopwatch)
+  const lapsContainer = document.createElement('div');
+  lapsContainer.className = 'laps-container';
+  lapsContainer.id = `lc-${g.id}`;
+  lapsContainer.style.display = 'none';
+  body.appendChild(lapsContainer);
+
+  card.appendChild(body);
+  container.appendChild(card);
+}
+
+function updateAllDisplays() {
+  groups.forEach(g => {
+    const rt = runtime[g.id];
+    if (!rt) return;
+
+    const td = document.getElementById(`td-${g.id}`);
+    const pf = document.getElementById(`pf-${g.id}`);
+    const settings = document.getElementById(`s-${g.id}`);
+    const controls = document.getElementById(`c-${g.id}`);
+    const hint = document.getElementById(`rh-${g.id}`);
+    const card = document.querySelector(`.card[data-id="${g.id}"]`);
+
+    if (!td) return;
+
+    // Update card flash
+    if (card) {
+      const isFlashing = rt.flashUntil && Date.now() < rt.flashUntil;
+      card.classList.toggle('flash', !!isFlashing);
+    }
+
+    if (g.mode === 'countdown') {
+      // Time display
+      td.className = 'time-display';
+      if (rt.status === 'done') {
+        td.textContent = '00:00:00';
+        td.classList.add('done');
+      } else if (rt.status === 'restart-wait') {
+        const left = rt.restartWaitUntil ? Math.max(0, Math.ceil((rt.restartWaitUntil - Date.now()) / 1000)) : 0;
+        td.textContent = `${left} 秒後自動重啟...`;
+        td.classList.add('waiting');
+      } else if (rt.status === 'running' || rt.status === 'paused') {
+        const rem = rt.status === 'paused' ? (rt.pausedRemainingMs || 0) : Math.max(0, rt.endTime - Date.now());
+        td.textContent = formatTime(rem);
+        if (rt.status === 'paused') td.classList.add('paused');
+      } else {
+        const totalMs = getCountdownMs(g);
+        td.textContent = totalMs > 0 ? formatTime(totalMs) : '00:00:00';
+      }
+
+      // Progress bar
+      if (pf) {
+        let progress = 0;
+        if (rt.status === 'done' || rt.status === 'restart-wait') {
+          progress = 1;
+        } else if (rt.status === 'running' || rt.status === 'paused') {
+          const total = rt.totalMs || getCountdownMs(g);
+          const rem = rt.status === 'paused' ? (rt.pausedRemainingMs || 0) : Math.max(0, rt.endTime - Date.now());
+          if (total > 0) progress = 1 - (rem / total);
+        }
+        pf.style.width = `${Math.min(100, progress * 100)}%`;
+        pf.className = 'progress-fill';
+        if (progress > 0.75) pf.classList.add('danger');
+        else if (progress > 0.5) pf.classList.add('warning');
+      }
+
+      // Settings visibility
+      if (settings) settings.classList.toggle('hidden', rt.status !== 'idle');
+
+      // Controls visibility
+      if (controls) {
+        const btns = controls.querySelectorAll('.btn');
+        btns.forEach(b => b.classList.remove('hidden'));
+        if (rt.status === 'idle') {
+          btns[0].textContent = '▶ 開始'; btns[0].disabled = false;
+          btns[0].className = 'btn btn-primary';
+          btns[1].classList.add('hidden');
+          btns[2].classList.remove('hidden'); btns[2].textContent = '↺ 重置';
+        } else if (rt.status === 'running') {
+          btns[0].classList.add('hidden');
+          btns[1].classList.remove('hidden'); btns[1].textContent = '⏸ 暫停';
+          btns[2].classList.remove('hidden'); btns[2].textContent = '↺ 重置';
+        } else if (rt.status === 'paused') {
+          btns[0].classList.remove('hidden'); btns[0].textContent = '▶ 繼續'; btns[0].className = 'btn btn-primary';
+          btns[1].classList.add('hidden');
+          btns[2].classList.remove('hidden'); btns[2].textContent = '↺ 重置';
+        } else if (rt.status === 'done') {
+          btns[0].classList.add('hidden');
+          btns[1].classList.add('hidden');
+          btns[2].classList.remove('hidden'); btns[2].textContent = '↺ 重置';
+        } else if (rt.status === 'restart-wait') {
+          btns[0].classList.add('hidden');
+          btns[1].classList.add('hidden');
+          btns[2].classList.remove('hidden'); btns[2].textContent = '↺ 取消重啟';
+        }
+      }
+
+      // Hint
+      if (hint) {
+        if (rt.status === 'restart-wait') {
+          const left = rt.restartWaitUntil ? Math.max(0, Math.ceil((rt.restartWaitUntil - Date.now()) / 1000)) : 0;
+          hint.textContent = `⏳ ${left} 秒後自動重新倒數...`;
+          hint.style.display = '';
+        } else {
+          hint.style.display = 'none';
+        }
+      }
+
+      // Progress bar visibility
+      if (pf) {
+        const wrap = pf.parentElement;
+        if (wrap) wrap.style.display = '';
+      }
+    } else {
+      // Stopwatch mode
+      // Time display
+      td.className = 'time-display';
+      if (rt.status === 'running') {
+        const elapsed = (rt.swPausedElapsed || 0) + (rt.swStartTime ? Date.now() - rt.swStartTime : 0);
+        td.innerHTML = formatTime(elapsed, true);
+      } else if (rt.status === 'paused') {
+        td.innerHTML = formatTime(rt.swPausedElapsed || 0, true);
+        td.classList.add('paused');
+      } else {
+        td.innerHTML = formatTime(0, true);
+      }
+
+      // Hide progress bar for stopwatch
+      if (pf) {
+        const wrap = pf.parentElement;
+        if (wrap) wrap.style.display = 'none';
+      }
+
+      // Settings hidden for stopwatch
+      if (settings) settings.classList.add('hidden');
+
+      // Controls
+      if (controls) {
+        const btns = controls.querySelectorAll('.btn');
+        btns.forEach(b => b.classList.remove('hidden'));
+        if (rt.status === 'idle') {
+          btns[0].classList.remove('hidden'); btns[0].textContent = '▶ 開始'; btns[0].className = 'btn btn-primary';
+          btns[1].classList.add('hidden');
+          btns[2].classList.add('hidden');
+          btns[3].classList.remove('hidden'); btns[3].textContent = '⏹ 停止';
+        } else if (rt.status === 'running') {
+          btns[0].classList.add('hidden');
+          btns[1].classList.remove('hidden'); btns[1].textContent = '⏸ 暫停';
+          btns[2].classList.remove('hidden');
+          btns[3].classList.remove('hidden'); btns[3].textContent = '⏹ 停止';
+        } else if (rt.status === 'paused') {
+          btns[0].classList.remove('hidden'); btns[0].textContent = '▶ 繼續'; btns[0].className = 'btn btn-primary';
+          btns[1].classList.add('hidden');
+          btns[2].classList.add('hidden');
+          btns[3].classList.remove('hidden'); btns[3].textContent = '⏹ 停止';
+        }
+      }
+
+      // Laps display
+      const lc = document.getElementById(`lc-${g.id}`);
+      if (lc) {
+        if (rt.swLaps && rt.swLaps.length > 0) {
+          lc.style.display = '';
+          lc.innerHTML = '<div class="laps-header">圈數</div>' +
+            rt.swLaps.map((lap, i) => {
+              const lt = formatTime(lap.time, true);
+              const ld = formatTime(lap.diff, true);
+              return `<div class="lap-row"><span class="lap-num">#${i+1}</span><span class="lap-time">${lt}</span><span class="lap-diff">+${ld}</span></div>`;
+            }).join('');
+          lc.scrollTop = lc.scrollHeight;
+        } else {
+          lc.style.display = 'none';
+        }
+      }
+
+      // Hint hidden for stopwatch
+      if (hint) hint.style.display = 'none';
+    }
+  });
+}
+
+function updateHeaderControls() {
+  document.getElementById('groupCountDisplay').textContent = groups.length;
+  document.getElementById('btnRemoveGroup').disabled = groups.length <= MIN_GROUPS;
+  document.getElementById('btnAddGroup').disabled = groups.length >= MAX_GROUPS;
+}
+
+// ─── Group Management ────────────────────────────────
+function addGroup() {
+  if (groups.length >= MAX_GROUPS) return;
+  const id = nextGroupId++;
+  const g = defaultGroup(id, groups.length);
+  groups.push(g);
+  runtime[id] = defaultRuntime(id);
+  saveState();
+  renderAll();
+}
+
+function removeGroup() {
+  if (groups.length <= MIN_GROUPS) return;
+  const g = groups.pop();
+  delete runtime[g.id];
+  saveState();
+  renderAll();
+}
+
+// ─── Init ────────────────────────────────────────────
+function init() {
+  initGroups();
+
+  document.getElementById('btnAddGroup').addEventListener('click', addGroup);
+  document.getElementById('btnRemoveGroup').addEventListener('click', removeGroup);
+  document.getElementById('btnExport').addEventListener('click', exportData);
+  document.getElementById('btnImport').addEventListener('click', () => {
+    document.getElementById('importFileInput').click();
+  });
+  document.getElementById('importFileInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => { importData(ev.target.result); e.target.value = ''; };
+    reader.readAsText(file);
+  });
+
+  renderAll();
+  updateTimerId = setInterval(updateTimers, UPDATE_INTERVAL);
+}
+
+// ─── Visibility API ──────────────────────────────────
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    // Re-calculate all timers immediately
+    updateTimers();
+    updateAllDisplays();
+  }
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  if (updateTimerId) clearInterval(updateTimerId);
+});
+
+init();
+</script>
+</body>
+</html>
