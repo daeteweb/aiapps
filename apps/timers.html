@@ -529,6 +529,8 @@ function defaultRuntime(id) {
     swLaps: [],
     // flash
     flashUntil: 0,
+    // warning beeps tracking
+    lastWarnSec: -1,
   };
 }
 
@@ -539,25 +541,53 @@ function getAudioCtx() {
   return audioCtx;
 }
 
+function playTick() {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.frequency.value = 1000; osc.type = 'sine';
+    g.gain.setValueAtTime(0.15, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.15);
+  } catch(e) { /* silent */ }
+}
+
 function playAlarm() {
   try {
     const ctx = getAudioCtx();
     const t = ctx.currentTime;
-    const osc1 = ctx.createOscillator();
-    const g1 = ctx.createGain();
-    osc1.connect(g1); g1.connect(ctx.destination);
-    osc1.frequency.value = 880; osc1.type = 'sine';
-    g1.gain.setValueAtTime(0.25, t);
-    g1.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
-    osc1.start(t); osc1.stop(t + 0.4);
-
+    // Fast beep-beep-beep intro (0.5s)
+    for (let i = 0; i < 3; i++) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880 + i * 60; o.type = 'square';
+      g.gain.setValueAtTime(0.18, t + i * 0.16);
+      g.gain.exponentialRampToValueAtTime(0.01, t + i * 0.16 + 0.12);
+      o.start(t + i * 0.16); o.stop(t + i * 0.16 + 0.12);
+    }
+    // Sustained alarm tone (2.5s)
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 660; osc.type = 'sawtooth';
+    gain.gain.setValueAtTime(0.01, t + 0.5);
+    gain.gain.linearRampToValueAtTime(0.2, t + 0.6);
+    gain.gain.setValueAtTime(0.2, t + 2.6);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 3.0);
+    osc.start(t + 0.5); osc.stop(t + 3.0);
+    // Second layer for richness
     const osc2 = ctx.createOscillator();
-    const g2 = ctx.createGain();
-    osc2.connect(g2); g2.connect(ctx.destination);
-    osc2.frequency.value = 660; osc2.type = 'sine';
-    g2.gain.setValueAtTime(0.25, t + 0.45);
-    g2.gain.exponentialRampToValueAtTime(0.01, t + 0.85);
-    osc2.start(t + 0.45); osc2.stop(t + 0.85);
+    const gain2 = ctx.createGain();
+    osc2.connect(gain2); gain2.connect(ctx.destination);
+    osc2.frequency.value = 880; osc2.type = 'sine';
+    gain2.gain.setValueAtTime(0.01, t + 0.5);
+    gain2.gain.linearRampToValueAtTime(0.12, t + 0.7);
+    gain2.gain.setValueAtTime(0.12, t + 2.4);
+    gain2.gain.exponentialRampToValueAtTime(0.01, t + 2.8);
+    osc2.start(t + 0.5); osc2.stop(t + 2.8);
   } catch(e) { /* silent */ }
 }
 
@@ -675,7 +705,7 @@ function pad2(n) { return String(n).padStart(2, '0'); }
 
 function formatTime(ms, showSub = false) {
   if (ms <= 0) return showSub ? '00:00:00.0' : '00:00:00';
-  const totalSec = Math.floor(ms / 1000);
+  const totalSec = showSub ? Math.floor(ms / 1000) : Math.ceil(ms / 1000);
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
@@ -704,6 +734,7 @@ function startTimer(id) {
     rt.endTime = Date.now() + totalMs;
     rt.status = 'running';
     rt.flashUntil = 0;
+    rt.lastWarnSec = -1;
     g.mode = 'countdown';
   } else {
     // stopwatch
@@ -770,6 +801,7 @@ function resetTimer(id) {
     rt.pausedRemainingMs = null;
     rt.restartWaitUntil = null;
     rt.flashUntil = 0;
+    rt.lastWarnSec = -1;
   } else {
     rt.status = 'idle';
     rt.swElapsed = 0;
@@ -821,6 +853,13 @@ function updateTimers() {
         const remaining = Math.max(0, rt.endTime - now);
         rt.remainingMs = remaining;
 
+        // 3-2-1 warning beeps
+        const sec = Math.ceil(remaining / 1000);
+        if (sec >= 1 && sec <= 3 && sec !== rt.lastWarnSec) {
+          rt.lastWarnSec = sec;
+          playTick();
+        }
+
         if (remaining <= 0) {
           // Time's up
           rt.remainingMs = 0;
@@ -847,6 +886,7 @@ function updateTimers() {
             rt.status = 'running';
             rt.restartWaitUntil = null;
             rt.flashUntil = 0;
+            rt.lastWarnSec = -1;
           } else {
             rt.status = 'idle';
             rt.restartWaitUntil = null;
