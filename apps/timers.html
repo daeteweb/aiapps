@@ -556,38 +556,36 @@ function playTick() {
 
 function playAlarm() {
   try {
+    const NOTES = {
+      'E5': 659.25, 'D5': 587.33, 'F#4': 369.99, 'G#4': 392.00,
+      'C#5': 554.37, 'B4': 493.88, 'D4': 293.66, 'E4': 329.63,
+      'A4': 440.00, 'A5': 880.00
+    };
+    const NOKIA_TUNE = [
+      ['E5', 2], ['D5', 2], ['F#4', 4], ['G#4', 4],
+      ['C#5', 2], ['B4', 2], ['D4', 4], ['E4', 4],
+      ['B4', 2], ['A4', 2], ['C#4', 4], ['E4', 4],
+      ['A4', 4], ['A4', 4], ['A4', 4], ['A4', 4]
+    ];
     const ctx = getAudioCtx();
-    const t = ctx.currentTime;
-    // Fast beep-beep-beep intro (0.5s)
-    for (let i = 0; i < 3; i++) {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.frequency.value = 880 + i * 60; o.type = 'square';
-      g.gain.setValueAtTime(0.18, t + i * 0.16);
-      g.gain.exponentialRampToValueAtTime(0.01, t + i * 0.16 + 0.12);
-      o.start(t + i * 0.16); o.stop(t + i * 0.16 + 0.12);
-    }
-    // Sustained alarm tone (2.5s)
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.value = 660; osc.type = 'sawtooth';
-    gain.gain.setValueAtTime(0.01, t + 0.5);
-    gain.gain.linearRampToValueAtTime(0.2, t + 0.6);
-    gain.gain.setValueAtTime(0.2, t + 2.6);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 3.0);
-    osc.start(t + 0.5); osc.stop(t + 3.0);
-    // Second layer for richness
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.connect(gain2); gain2.connect(ctx.destination);
-    osc2.frequency.value = 880; osc2.type = 'sine';
-    gain2.gain.setValueAtTime(0.01, t + 0.5);
-    gain2.gain.linearRampToValueAtTime(0.12, t + 0.7);
-    gain2.gain.setValueAtTime(0.12, t + 2.4);
-    gain2.gain.exponentialRampToValueAtTime(0.01, t + 2.8);
-    osc2.start(t + 0.5); osc2.stop(t + 2.8);
+    const bpm = 180;
+    const qDur = 60 / bpm;
+    const sDur = qDur / 4;
+    let t = ctx.currentTime;
+    NOKIA_TUNE.forEach(([note, units]) => {
+      const dur = sDur * units;
+      if (NOTES[note]) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(NOTES[note], t);
+        gain.gain.setValueAtTime(0.9, t);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur - 0.02);
+        osc.start(t); osc.stop(t + dur);
+      }
+      t += dur;
+    });
   } catch(e) { /* silent */ }
 }
 
