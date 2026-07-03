@@ -279,9 +279,21 @@
         @media (max-width: 768px) {
             #main { display: none; }
             #readme-view { padding: 24px 5vw; }
-            /* on small screens keep the gold line and button visible but slightly smaller */
-            #menu-edge { width: 28px; }
-            #menu-tab { left: 10px; width: 34px; height: 34px; }
+            
+            /* 手機上：半圓按鈕 */
+            #menu-edge { 
+                width: 20px;
+            }
+            #menu-tab { 
+                left: 10px; 
+                width: 20px; 
+                height: 24px;
+                border-radius: 0 12px 12px 0;
+                font-size: 0.9rem;
+            }
+            #menu-tab:hover {
+                transform: translate(-50%, -50%) scale(1.05);
+            }
         }
     </style>
 </head>
@@ -323,6 +335,7 @@
     const overlay  = document.getElementById('overlay');
     const menuTab  = document.getElementById('menu-tab');
     const closeBtn = document.getElementById('sidebar-close-btn');
+    const menuEdge = document.getElementById('menu-edge');
 
     function openSidebar() {
         sidebar.classList.add('open');
@@ -481,7 +494,8 @@
                     navItem.classList.add('active');
 
                     if (mobile) {
-                        window.open(item.path, '_blank');
+                        // 手機版：在 iframe 中開啟，不開新頁面
+                        showApp(item.path);
                     } else {
                         showApp(item.path);
                     }
