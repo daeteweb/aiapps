@@ -57,12 +57,19 @@ body {
 .count-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,.1); box-shadow: 0 0 16px rgba(0,229,255,.3); }
 .player-count-selector { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .player-count-selector label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
+.setup-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 .start-btn {
   padding: 14px 40px; background: var(--accent); color: #000; border: none;
   border-radius: var(--radius); font-family: 'Bebas Neue', sans-serif; font-size: clamp(16px, 4vw, 22px);
   letter-spacing: 3px; cursor: pointer; box-shadow: 0 0 24px rgba(0,229,255,.35);
 }
 .start-btn:active { opacity: .85; }
+.load-btn {
+  padding: 14px 40px; background: transparent; border: 2px solid var(--accent); color: var(--accent);
+  border-radius: var(--radius); font-family: 'Bebas Neue', sans-serif; font-size: clamp(16px, 4vw, 22px);
+  letter-spacing: 3px; cursor: pointer;
+}
+.load-btn:active { background: rgba(0,229,255,.1); }
 
 /* ── Game Screen ── */
 #game-screen {
@@ -360,7 +367,10 @@ body {
     <label>選擇人數</label>
     <div class="count-btns" id="count-btns"></div>
   </div>
-  <button class="start-btn" onclick="startGame()">開始遊戲</button>
+  <div class="setup-btns">
+    <button class="start-btn" onclick="startGame()">開始遊戲</button>
+    <button class="load-btn" id="load-btn" style="display:none;" onclick="loadGame()">📂 載入遊戲</button>
+  </div>
 </div>
 
 <!-- Game -->
@@ -485,6 +495,26 @@ function npGuard() {
   return false;
 }
 
+// ── Storage ────────────────────────────────────────────────────────
+const STORAGE_KEY = 'scorekeeper_game';
+
+function saveGame() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(G));
+}
+
+function loadGameFromStorage() {
+  const data = localStorage.getItem(STORAGE_KEY);
+  return data ? JSON.parse(data) : null;
+}
+
+function hasSavedGame() {
+  return localStorage.getItem(STORAGE_KEY) !== null;
+}
+
+function clearSavedGame() {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 // ── Setup ──────────────────────────────────────────────────────────
 (function() {
   const wrap = document.getElementById('count-btns');
@@ -494,6 +524,11 @@ function npGuard() {
     b.textContent = i;
     b.addEventListener('click', () => selectCount(i));
     wrap.appendChild(b);
+  }
+  
+  // Show load button if there's a saved game
+  if (hasSavedGame()) {
+    document.getElementById('load-btn').style.display = 'inline-block';
   }
 })();
 
@@ -512,6 +547,26 @@ function startGame() {
 
   // Sync horizontal scroll between #scroll-body and #name-header
   document.getElementById('scroll-body').addEventListener('scroll', syncHeader);
+  saveGame();
+}
+
+function loadGame() {
+  const saved = loadGameFromStorage();
+  if (!saved) {
+    showToast('沒有找到存檔');
+    return;
+  }
+  
+  G = saved;
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display = 'flex';
+  buildNameHeader();
+  render();
+  document.getElementById('round-info').textContent = `第 ${G.rounds.length} 局`;
+
+  // Sync horizontal scroll between #scroll-body and #name-header
+  document.getElementById('scroll-body').addEventListener('scroll', syncHeader);
+  showToast('已載入遊戲');
 }
 
 // ── Sticky name header ─────────────────────────────────────────────
@@ -549,6 +604,7 @@ function pushRound() {
   G.rounds.push({ winner: null, scores: new Array(G.playerCount).fill(null) });
   render();
   document.getElementById('round-info').textContent = `第 ${G.rounds.length} 局`;
+  saveGame();
 }
 
 function addRound() {
@@ -570,6 +626,7 @@ function resetGame() {
   G.players.forEach(p => p.total = 0);
   G.rounds = [];
   pushRound();
+  saveGame();
 }
 
 // ── Menu ──────────────────────────────────────────────────────────
@@ -590,8 +647,15 @@ function menuNewGame() {
   setTimeout(() => {
     if (!confirm('確定要回到設定畫面嗎？目前分數將會清除。')) return;
     G.players = []; G.rounds = [];
+    clearSavedGame();
     document.getElementById('game-screen').style.display = 'none';
     document.getElementById('setup-screen').style.display = 'flex';
+    // Refresh load button visibility
+    if (hasSavedGame()) {
+      document.getElementById('load-btn').style.display = 'inline-block';
+    } else {
+      document.getElementById('load-btn').style.display = 'none';
+    }
   }, 200);
 }
 
@@ -600,7 +664,10 @@ function deleteRound(ri) {
   r.scores.forEach((v, i) => { if (v !== null) G.players[i].total -= v; });
   G.rounds.splice(ri, 1);
   if (G.rounds.length === 0) pushRound();
-  else render();
+  else {
+    render();
+    saveGame();
+  }
   document.getElementById('round-info').textContent = `第 ${G.rounds.length} 局`;
   showToast(`已刪除第 ${ri + 1} 局`);
 }
@@ -611,6 +678,7 @@ function pickWinner(ri, pi) {
   if (r.winner !== null) return;
   r.winner = pi;
   render();
+  saveGame();
   showToast(`🏆 ${G.players[pi].name} 是本局贏家，請輸入輸家分數`);
 }
 
@@ -626,6 +694,7 @@ function tryAutoFill(ri) {
   r.scores[wi] = sum;
   G.players[wi].total += sum;
   render();
+  saveGame();
   showToast(sum > 0 ? `🏆 ${G.players[wi].name} 贏得 +${sum} 分！` : '本局結束');
 }
 
@@ -824,6 +893,7 @@ function confirmNumpad() {
     r.scores[r.winner] = null;
   }
   closeNumpad();
+  saveGame();
   tryAutoFill(ri);
   render();
 }
@@ -841,6 +911,7 @@ function confirmNameEdit() {
   if (v) G.players[nameEditIdx].name = v;
   closeNameEdit();
   updateNameHeader(); // update header without full rebuild
+  saveGame();
   render();
 }
 document.getElementById('name-input').addEventListener('keydown', e => { if (e.key === 'Enter') confirmNameEdit(); });
