@@ -85,6 +85,11 @@
     "description": "可以自動拉霸的拉霸機，選項裡可以更換機台（改變每一種圖案的出現機率）"
   },
   {
+    "path": "apps/startracker.html",
+    "title": "StarTracker 離線星空星圖",
+    "description": ""
+  },
+  {
     "path": "apps/timers.html",
     "title": "多功能計時器",
     "description": ""
