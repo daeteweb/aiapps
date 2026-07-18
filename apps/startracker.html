@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StarTracker 離線星空星圖</title>
+<style>
+:root {
+  --bg-deep: #03050c;
+  --bg-surface: rgba(10,18,42,0.82);
+  --bg-glass: rgba(14,24,52,0.62);
+  --bg-glass2: rgba(12,22,48,0.45);
+  --gb: rgba(60,90,160,0.2);
+  --text: #e8edf5;
+  --text2: #8fa8d0;
+  --text3: #4d6a92;
+  --accent: #f0c060;
+  --accent2: #6ea8ff;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html,body { height:100%; background:var(--bg-deep); color:var(--text); font-family:-apple-system,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+#app { display:flex; flex-direction:column; height:100vh; }
+header { padding:10px 18px; background:var(--bg-surface); border-bottom:1px solid var(--gb); backdrop-filter:blur(12px); }
+header h1 { margin:0; font-size:17px; font-weight:700; color:var(--accent); letter-spacing:1px; }
+header .sub { font-size:12px; color:var(--text3); margin-top:1px; }
+#controls { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:flex-end; padding:10px 16px; background:var(--bg-glass); border-bottom:1px solid var(--gb); backdrop-filter:blur(8px); }
+.field { display:flex; flex-direction:column; gap:3px; }
+.field label { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:.8px; font-weight:600; }
+.field input,.field select { background:rgba(6,10,24,0.7); color:var(--text); border:1px solid var(--gb); border-radius:8px; padding:6px 10px; font-size:13px; min-width:56px; transition:border-color .15s,box-shadow .15s; }
+.field input:focus,.field select:focus { outline:none; border-color:var(--accent2); box-shadow:0 0 0 2px rgba(110,168,255,.2); }
+.field input[type=range] { padding:0; min-width:90px; accent-color:var(--accent); }
+#toggles { display:flex; gap:5px; padding:5px 16px; background:var(--bg-glass2); border-bottom:1px solid var(--gb); flex-wrap:wrap; }
+.tog-btn { background:rgba(30,50,90,0.4); color:var(--text2); border:1px solid var(--gb); border-radius:6px; padding:3px 10px; font-size:11px; cursor:pointer; transition:all .15s; user-select:none; }
+.tog-btn:hover { background:rgba(50,80,140,0.5); }
+.tog-btn.on { background:rgba(60,100,200,0.35); color:var(--accent2); border-color:var(--accent2); }
+#mapWrap { flex:1; position:relative; overflow:hidden; background:radial-gradient(ellipse at 50% 50%,#0a1428 0%,#020408 100%); }
+svg { width:100%; height:100%; display:block; }
+#timeBar { display:flex; align-items:center; gap:10px; padding:8px 16px; background:var(--bg-glass); border-top:1px solid var(--gb); backdrop-filter:blur(8px); }
+#timeBar input[type=range] { flex:1; accent-color:var(--accent); height:6px; }
+#clock { font-variant-numeric:tabular-nums; font-size:16px; font-weight:700; color:var(--accent); min-width:62px; text-align:center; letter-spacing:.5px; }
+#nowBtn { background:rgba(240,192,96,.15); color:var(--accent); border:1px solid rgba(240,192,96,.3); border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer; transition:all .15s; white-space:nowrap; }
+#nowBtn:hover { background:rgba(240,192,96,.25); }
+#infoBar { display:flex; gap:16px; padding:5px 16px; background:var(--bg-glass2); font-size:11px; color:var(--text3); flex-wrap:wrap; }
+#infoBar span { white-space:nowrap; }
+#infoBar b { color:var(--text2); font-weight:600; }
+.hint { font-size:11px; color:var(--text3); }
+.star-label { font-size: calc(9px * var(--fs,1)); fill:#a0bce8; pointer-events:all; cursor:pointer; transition:font-size .12s; }
+.planet-label { font-size: calc(10px * var(--fs,1)); font-weight:600; pointer-events:all; cursor:pointer; transition:font-size .12s; }
+.con-label { font-size: calc(12px * var(--fs,1)); fill:#4a6a9a; font-weight:700; pointer-events:all; cursor:pointer; text-anchor:middle; transition:font-size .12s, fill .12s; }
+.grid-label { font-size:9px; fill:#3a5a7a; pointer-events:none; }
+.con-line.highlight { stroke:#7aafe0 !important; stroke-width:2.5 !important; opacity:1 !important; }
+text.label-zoom { font-size: calc(20px * var(--fs,1)) !important; fill:#fff !important; }
+svg { width:100%; height:100%; display:block; cursor:grab; }
+svg.grabbing { cursor:grabbing; }
+#mapWrap.fs { position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:999; }
+#app.fs header,#app.fs #controls,#app.fs #toggles,#app.fs #timeBar,#app.fs #infoBar { display:none; }
+#fsBtn { position:absolute; top:8px; right:8px; z-index:10; background:rgba(20,40,80,.55); color:var(--text2); border:1px solid var(--gb); border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; backdrop-filter:blur(4px); transition:all .15s; }
+#fsBtn:hover { background:rgba(40,70,120,.7); color:var(--text); }
+.legend { position:absolute; top:10px; left:10px; font-size:11px; color:var(--text3); background:rgba(8,12,24,.55); padding:6px 10px; border-radius:8px; border:1px solid var(--gb); line-height:1.6; backdrop-filter:blur(6px); }
+.legend b { color:var(--text); }
+@media (max-width:640px) { #controls { gap:6px 10px; padding:8px 10px; } .field input,.field select { font-size:12px; padding:5px 7px; } #toggles { padding:4px 10px; } #infoBar { font-size:10px; gap:10px; } #controls .wide { display:none; } }
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <h1>StarTracker · 離線星空星圖</h1>
+  <div class="sub">設定日期與地點，拖拉時間滑桿觀察星空移動（南方為中心）</div>
+</header>
+
+<div id="controls">
+  <div class="field"><label>年</label><input id="year" type="number" value="2026" min="1900" max="2100"></div>
+  <div class="field"><label>月</label><input id="month" type="number" value="7" min="1" max="12"></div>
+  <div class="field"><label>日</label><input id="day" type="number" value="18" min="1" max="31"></div>
+  <div class="field"><label>城市</label><select id="city"></select></div>
+  <div class="field"><label>經度 (°)</label><input id="lon" type="number" value="121.5" step="0.01"></div>
+  <div class="field"><label>緯度 (°)</label><input id="lat" type="number" value="25.0" step="0.01"></div>
+  <div class="field"><label>視星等</label><input id="magLimit" type="range" min="1" max="6.5" step="0.1" value="6.0"></div>
+  <div class="field"><label></label><span class="hint" id="magVal">6.0</span></div>
+  <div class="field"><label>語言</label><select id="lang"><option value="cn">中文</option><option value="en">EN</option></select></div>
+</div>
+
+<div id="toggles">
+  <span class="tog-btn on" data-toggle="grid">網格</span>
+  <span class="tog-btn on" data-toggle="lines">星座線</span>
+  <span class="tog-btn on" data-toggle="labels">標籤</span>
+  <span class="tog-btn on" data-toggle="names">星座名</span>
+  <span class="tog-btn on" data-toggle="planets">行星</span>
+  <span class="hint" style="margin-left:auto">← →±10分 · ↑↓星等 · GLC快捷</span>
+</div>
+
+<div id="mapWrap">
+  <svg id="sky" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="legend" id="legend"></div>
+  <button id="fsBtn">⛶ 全螢幕</button>
+</div>
+
+<div id="timeBar">
+  <span class="hint">00:00</span>
+  <input id="time" type="range" min="0" max="1440" step="1">
+  <span class="hint">24:00</span>
+  <span id="clock">21:00</span>
+  <button id="nowBtn">現在時間</button>
+</div>
+
+<div id="infoBar">
+  <span>地方恆星時 (LST) <b id="lstVal">--</b></span>
+  <span>可見恆星 <b id="starCount">0</b></span>
+  <span id="moonInfo"></span>
+</div>
+</div>
+
+<script>
+const D2R=Math.PI/180,R2D=180/Math.PI;
+const norm360=a=>((a%360)+360)%360;
+const sin=Math.sin,cos=Math.cos,atan2=Math.atan2,sqrt=Math.sqrt;
+
+function starLabel(s){if(!s.name)return"";const lang=document.getElementById("lang").value;if(lang==="cn"&&s.cn)return s.cn;return s.name}
+
+const CITIES=[
+  {name:"台北 Taipei",lat:25.03,lon:121.56},{name:"高雄 Kaohsiung",lat:22.63,lon:120.30},{name:"香港 Hong Kong",lat:22.32,lon:114.17},{name:"上海 Shanghai",lat:31.23,lon:121.47},{name:"北京 Beijing",lat:39.90,lon:116.41},{name:"東京 Tokyo",lat:35.68,lon:139.69},{name:"首爾 Seoul",lat:37.57,lon:126.98},{name:"新加坡 Singapore",lat:1.35,lon:103.82},{name:"曼谷 Bangkok",lat:13.76,lon:100.50},{name:"新德里 Delhi",lat:28.61,lon:77.21},{name:"杜拜 Dubai",lat:25.20,lon:55.27},{name:"莫斯科 Moscow",lat:55.75,lon:37.62},{name:"倫敦 London",lat:51.51,lon:-0.13},{name:"巴黎 Paris",lat:48.85,lon:2.35},{name:"柏林 Berlin",lat:52.52,lon:13.40},{name:"羅馬 Rome",lat:41.90,lon:12.50},{name:"開羅 Cairo",lat:30.04,lon:31.24},{name:"約翰尼斯堡 Johannesburg",lat:-26.20,lon:28.05},{name:"紐約 New York",lat:40.71,lon:-74.01},{name:"洛杉磯 Los Angeles",lat:34.05,lon:-118.24},{name:"芝加哥 Chicago",lat:41.88,lon:-87.63},{name:"多倫多 Toronto",lat:43.65,lon:-79.38},{name:"墨西哥城 Mexico City",lat:19.43,lon:-99.13},{name:"聖保羅 Sao Paulo",lat:-23.55,lon:-46.63},{name:"布宜諾斯艾利斯 Buenos Aires",lat:-34.60,lon:-58.38},{name:"雪梨 Sydney",lat:-33.87,lon:151.21},{name:"墨爾本 Melbourne",lat:-37.81,lon:144.96},{name:"奧克蘭 Auckland",lat:-36.85,lon:174.76},{name:"開普敦 Cape Town",lat:-33.92,lon:18.42},{name:"檀香山 Honolulu",lat:21.31,lon:-157.86},
+];
+
+const STARS=[
+  {ra:165.93,dec:61.75,mag:1.8,name:"Dubhe",cn:"天樞",con:"UMa"},{ra:166.33,dec:56.38,mag:2.4,name:"Merak",cn:"天璇",con:"UMa"},{ra:178.46,dec:53.69,mag:2.4,name:"Phecda",cn:"天璣",con:"UMa"},{ra:183.86,dec:54.93,mag:3.3,name:"Megrez",cn:"天權",con:"UMa"},{ra:204.96,dec:49.31,mag:1.8,name:"Alioth",cn:"玉衡",con:"UMa"},{ra:211.97,dec:53.70,mag:2.4,name:"Mizar",cn:"開陽",con:"UMa"},{ra:218.36,dec:57.03,mag:1.9,name:"Alkaid",cn:"搖光",con:"UMa"},
+  {ra:259.16,dec:89.26,mag:2.0,name:"Polaris",cn:"勾陳一（北極星）",con:"UMi"},{ra:211.95,dec:75.75,mag:4.3,con:"UMi"},{ra:214.69,dec:71.83,mag:5.0,con:"UMi"},{ra:218.86,dec:73.18,mag:4.2,con:"UMi"},{ra:205.88,dec:77.38,mag:4.3,con:"UMi"},{ra:244.42,dec:86.59,mag:3.0,name:"Kochab",cn:"帝",con:"UMi"},{ra:233.67,dec:82.04,mag:4.2,con:"UMi"},
+  {ra:10.13,dec:59.15,mag:2.2,name:"Segin",cn:"閣道四",con:"Cas"},{ra:21.45,dec:60.24,mag:3.4,name:"Ruchbah",cn:"閣道三",con:"Cas"},{ra:28.60,dec:63.67,mag:2.7,name:"Gamma Cas",cn:"策",con:"Cas"},{ra:36.02,dec:56.54,mag:2.5,name:"Schedar",cn:"王良四",con:"Cas"},{ra:2.29,dec:58.97,mag:3.4,name:"Caph",cn:"王良一",con:"Cas"},
+  {ra:83.00,dec:-8.20,mag:0.5,name:"Rigel",cn:"參宿七",con:"Ori"},{ra:81.57,dec:-1.20,mag:1.6,name:"Bellatrix",cn:"參宿五",con:"Ori"},{ra:88.79,dec:-1.94,mag:1.7,name:"Alnilam",cn:"參宿三",con:"Ori"},{ra:86.94,dec:-2.40,mag:1.7,name:"Alnitak",cn:"參宿一",con:"Ori"},{ra:85.19,dec:-9.67,mag:2.2,name:"Mintaka",cn:"參宿二",con:"Ori"},{ra:78.63,dec:7.41,mag:0.4,name:"Betelgeuse",cn:"參宿四",con:"Ori"},{ra:83.78,dec:-5.91,mag:3.4,name:"Saiph",cn:"參宿六",con:"Ori"},
+  {ra:104.66,dec:-17.95,mag:-1.5,name:"Sirius",cn:"天狼",con:"CMa"},{ra:95.74,dec:-28.97,mag:1.5,name:"Mirzam",cn:"弧矢一",con:"CMa"},{ra:106.03,dec:-23.83,mag:2.0,name:"Wezen",cn:"弧矢二",con:"CMa"},{ra:107.23,dec:-26.39,mag:1.5,name:"Aludra",cn:"弧矢七",con:"CMa"},{ra:101.89,dec:-15.56,mag:3.0,con:"CMa"},
+  {ra:114.83,dec:5.23,mag:0.4,name:"Procyon",cn:"南河三",con:"CMi"},{ra:112.63,dec:8.29,mag:2.9,name:"Gomeisa",cn:"南河二",con:"CMi"},
+  {ra:113.65,dec:28.03,mag:1.9,name:"Castor",cn:"北河二",con:"Gem"},{ra:116.33,dec:31.89,mag:1.1,name:"Pollux",cn:"北河三",con:"Gem"},{ra:99.43,dec:24.40,mag:3.2,con:"Gem"},{ra:94.96,dec:22.51,mag:3.6,con:"Gem"},{ra:105.31,dec:22.51,mag:3.3,con:"Gem"},{ra:91.44,dec:13.44,mag:3.3,con:"Gem"},
+  {ra:68.98,dec:16.51,mag:0.9,name:"Aldebaran",cn:"畢宿五",con:"Tau"},{ra:56.20,dec:21.14,mag:2.9,con:"Tau"},{ra:58.50,dec:23.95,mag:3.4,con:"Tau"},{ra:60.37,dec:25.61,mag:2.8,con:"Tau"},{ra:62.03,dec:24.11,mag:3.6,con:"Tau"},{ra:64.38,dec:25.91,mag:3.4,con:"Tau"},{ra:54.71,dec:15.96,mag:2.9,con:"Tau"},{ra:52.94,dec:40.86,mag:2.8,name:"Alcyone",cn:"昴宿六",con:"Tau"},
+  {ra:75.84,dec:37.21,mag:0.1,name:"Capella",cn:"五車二",con:"Aur"},{ra:73.39,dec:40.96,mag:2.7,con:"Aur"},{ra:76.88,dec:43.82,mag:2.6,con:"Aur"},{ra:79.17,dec:44.94,mag:3.2,con:"Aur"},
+  {ra:48.21,dec:49.86,mag:1.8,name:"Mirfak",cn:"天船三",con:"Per"},{ra:41.21,dec:49.93,mag:2.9,con:"Per"},{ra:34.92,dec:42.58,mag:3.0,con:"Per"},{ra:30.63,dec:40.01,mag:3.4,con:"Per"},{ra:58.87,dec:40.96,mag:2.1,name:"Algol",cn:"大陵五",con:"Per"},
+  {ra:17.43,dec:35.62,mag:2.1,name:"Alpheratz",cn:"壁宿二",con:"And"},{ra:34.91,dec:42.33,mag:2.3,name:"Mirach",cn:"奎宿九",con:"And"},{ra:44.50,dec:48.51,mag:3.9,con:"And"},{ra:28.61,dec:29.09,mag:4.1,con:"And"},
+  {ra:279.23,dec:38.78,mag:0.0,name:"Vega",cn:"織女一",con:"Lyr"},{ra:282.52,dec:33.36,mag:3.2,con:"Lyr"},{ra:284.74,dec:37.60,mag:3.5,con:"Lyr"},{ra:283.79,dec:39.79,mag:4.3,con:"Lyr"},
+  {ra:310.36,dec:45.28,mag:1.3,name:"Deneb",cn:"天津四",con:"Cyg"},{ra:305.56,dec:40.26,mag:2.5,name:"Sadr",cn:"天津一",con:"Cyg"},{ra:292.43,dec:27.96,mag:2.5,name:"Albireo",cn:"輦道增七",con:"Cyg"},{ra:299.14,dec:33.97,mag:3.2,con:"Cyg"},{ra:318.24,dec:45.13,mag:2.9,con:"Cyg"},{ra:305.00,dec:50.28,mag:3.7,con:"Cyg"},{ra:324.18,dec:42.16,mag:3.9,con:"Cyg"},
+  {ra:297.70,dec:8.87,mag:0.8,name:"Altair",cn:"河鼓二（牛郎）",con:"Aql"},{ra:290.39,dec:10.61,mag:3.4,con:"Aql"},{ra:303.63,dec:6.41,mag:3.7,con:"Aql"},{ra:285.57,dec:13.88,mag:3.0,con:"Aql"},
+  {ra:213.92,dec:19.18,mag:-0.1,name:"Arcturus",cn:"大角",con:"Boo"},{ra:222.72,dec:27.07,mag:3.5,con:"Boo"},{ra:218.05,dec:18.40,mag:3.5,con:"Boo"},{ra:229.25,dec:29.74,mag:3.6,con:"Boo"},{ra:206.90,dec:21.49,mag:3.4,con:"Boo"},
+  {ra:201.30,dec:-11.16,mag:1.0,name:"Spica",cn:"角宿一",con:"Vir"},{ra:186.94,dec:-3.40,mag:3.4,con:"Vir"},{ra:189.01,dec:1.77,mag:3.4,con:"Vir"},{ra:193.91,dec:11.81,mag:3.4,con:"Vir"},{ra:203.69,dec:3.40,mag:3.4,con:"Vir"},{ra:208.67,dec:-9.38,mag:3.4,con:"Vir"},
+  {ra:152.09,dec:19.84,mag:1.4,name:"Regulus",cn:"軒轅十四",con:"Leo"},{ra:168.56,dec:23.42,mag:2.1,name:"Denebola",cn:"五帝座一",con:"Leo"},{ra:154.99,dec:14.57,mag:2.6,con:"Leo"},{ra:158.36,dec:20.52,mag:3.4,con:"Leo"},{ra:163.55,dec:9.89,mag:3.3,con:"Leo"},{ra:148.19,dec:9.89,mag:3.4,con:"Leo"},{ra:146.44,dec:14.57,mag:2.2,name:"Algieba",cn:"軒轅十二",con:"Leo"},
+  {ra:247.35,dec:-19.81,mag:1.1,name:"Antares",cn:"心宿二",con:"Sco"},{ra:240.07,dec:-25.59,mag:2.9,con:"Sco"},{ra:242.49,dec:-22.62,mag:3.0,con:"Sco"},{ra:243.81,dec:-28.21,mag:2.6,con:"Sco"},{ra:255.34,dec:-37.04,mag:1.6,name:"Shaula",cn:"尾宿八",con:"Sco"},{ra:252.98,dec:-34.29,mag:2.7,con:"Sco"},{ra:249.29,dec:-40.09,mag:1.9,name:"Sargas",cn:"尾宿九",con:"Sco"},
+  {ra:283.82,dec:-29.88,mag:2.0,name:"Kaus Australis",cn:"箕宿三",con:"Sgr"},{ra:276.04,dec:-25.42,mag:2.6,con:"Sgr"},{ra:286.21,dec:-21.06,mag:2.8,con:"Sgr"},{ra:274.46,dec:-25.25,mag:2.8,con:"Sgr"},{ra:288.51,dec:-26.99,mag:3.3,con:"Sgr"},{ra:271.45,dec:-19.81,mag:3.3,con:"Sgr"},{ra:266.33,dec:-20.77,mag:2.8,con:"Sgr"},
+  {ra:186.65,dec:-63.10,mag:1.3,name:"Acrux",cn:"十字架二",con:"Cru"},{ra:191.93,dec:-59.69,mag:2.8,con:"Cru"},{ra:184.31,dec:-58.75,mag:1.6,name:"Mimosa",cn:"十字架三",con:"Cru"},{ra:195.55,dec:-57.11,mag:2.8,con:"Cru"},
+  {ra:219.90,dec:-60.83,mag:-0.3,name:"Rigil Kent",cn:"南門二",con:"Cen"},{ra:210.96,dec:-50.61,mag:2.2,con:"Cen"},{ra:211.67,dec:-36.37,mag:2.7,con:"Cen"},{ra:200.92,dec:-47.29,mag:2.3,con:"Cen"},{ra:229.25,dec:-49.45,mag:2.3,con:"Cen"},{ra:174.32,dec:-42.14,mag:2.8,con:"Cen"},
+  {ra:138.30,dec:-59.69,mag:-0.7,name:"Canopus",cn:"老人",con:"Car"},{ra:160.01,dec:-58.97,mag:1.9,con:"Car"},{ra:133.84,dec:-69.72,mag:3.3,con:"Car"},{ra:124.36,dec:-63.43,mag:3.9,con:"Car"},
+  {ra:71.44,dec:-8.90,mag:0.5,name:"Achernar",cn:"水委一",con:"Eri"},{ra:59.51,dec:-5.09,mag:2.8,con:"Eri"},{ra:47.85,dec:-0.30,mag:3.5,con:"Eri"},{ra:40.03,dec:9.93,mag:3.7,con:"Eri"},{ra:28.66,dec:3.73,mag:3.7,con:"Eri"},{ra:14.18,dec:-5.39,mag:3.7,con:"Eri"},
+  {ra:40.56,dec:-72.13,mag:2.8,con:"Hyi"},{ra:20.35,dec:-67.23,mag:3.3,con:"Hyi"},
+  {ra:6.57,dec:-42.31,mag:2.4,con:"Phe"},{ra:25.95,dec:-46.71,mag:2.8,con:"Phe"},
+  {ra:258.66,dec:21.49,mag:2.8,con:"Her"},{ra:256.83,dec:14.39,mag:3.5,con:"Her"},{ra:268.35,dec:21.97,mag:3.5,con:"Her"},{ra:247.40,dec:21.49,mag:3.9,con:"Her"},
+  {ra:233.67,dec:26.71,mag:2.2,name:"Alphecca",cn:"貫索四",con:"CrB"},{ra:231.58,dec:29.11,mag:3.9,con:"CrB"},{ra:237.46,dec:25.55,mag:4.0,con:"CrB"},
+  {ra:222.72,dec:-9.38,mag:2.6,con:"Lib"},{ra:229.25,dec:-16.04,mag:3.2,con:"Lib"},
+  {ra:322.03,dec:-12.53,mag:3.1,con:"Cap"},{ra:326.56,dec:-14.78,mag:3.6,con:"Cap"},
+  {ra:334.35,dec:-0.32,mag:2.9,name:"Sadalsuud",cn:"虛宿一",con:"Aqr"},{ra:331.46,dec:-5.57,mag:3.0,con:"Aqr"},{ra:343.58,dec:-5.89,mag:3.8,con:"Aqr"},
+  {ra:2.29,dec:15.34,mag:3.6,con:"Psc"},{ra:15.82,dec:7.89,mag:4.3,con:"Psc"},
+  {ra:31.79,dec:23.46,mag:2.0,name:"Hamal",cn:"婁宿三",con:"Ari"},{ra:44.14,dec:21.10,mag:2.6,name:"Sheratan",cn:"婁宿一",con:"Ari"},{ra:47.84,dec:18.99,mag:4.5,con:"Ari"},
+  {ra:238.25,dec:6.43,mag:2.6,name:"Unukalhai",cn:"蜀",con:"Ser"},{ra:234.25,dec:13.36,mag:3.7,con:"Ser"},
+  {ra:341.39,dec:-29.62,mag:1.2,name:"Fomalhaut",cn:"北落師門",con:"PsA"},
+  {ra:15.02,dec:-65.93,mag:2.9,con:"Tuc"},{ra:305.56,dec:-56.73,mag:1.9,con:"Pav"},
+  {ra:141.90,dec:-8.66,mag:2.0,name:"Alphard",cn:"星宿一",con:"Hya"},{ra:130.00,dec:-3.00,mag:3.5,con:"Hya"},{ra:155.00,dec:-22.00,mag:3.5,con:"Hya"},
+  {ra:190.00,dec:28.00,mag:4.3,con:"Com"},{ra:170.00,dec:-18.00,mag:3.6,con:"Crt"},{ra:45.00,dec:-30.00,mag:4.0,con:"For"},{ra:45.00,dec:-55.00,mag:3.9,con:"Hor"},{ra:80.00,dec:-80.00,mag:5.1,con:"Men"},{ra:82.00,dec:-62.00,mag:3.3,con:"Dor"},{ra:60.00,dec:-62.00,mag:3.4,con:"Ret"},{ra:100.00,dec:-54.00,mag:3.3,con:"Pic"},
+  {ra:140.00,dec:-50.00,mag:1.8,con:"Vel"},{ra:148.00,dec:-47.00,mag:2.2,con:"Vel"},
+  {ra:309.05,dec:-43.00,mag:3.0,con:"Gru"},{ra:332.06,dec:-46.94,mag:2.1,name:"Alnair",cn:"鶴一",con:"Gru"},
+  {ra:78.63,dec:7.41,mag:0.4,name:"Betelgeuse",cn:"參宿四",con:"Ori"},
+  {ra:346.19,dec:15.21,mag:2.4,name:"Markab",cn:"室宿一",con:"Peg"},{ra:323.62,dec:14.57,mag:2.8,con:"Peg"},{ra:340.66,dec:30.22,mag:2.4,con:"Peg"},{ra:317.42,dec:27.74,mag:2.5,con:"Peg"},
+  {ra:311.55,dec:47.79,mag:3.9,con:"Cyg"},
+];
+
+const CONSTELLATION_LINES=[
+  [0,1],[1,2],[2,3],[3,0],[3,4],[4,5],[5,6],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],
+  [14,15],[15,16],[16,17],[17,18],[19,20],[20,21],[21,22],[22,23],[19,24],[20,25],[24,26],
+  [27,28],[27,29],[29,30],[27,31],[32,33],[34,35],[35,36],[36,37],[37,38],[38,39],
+  [40,41],[41,42],[42,43],[43,44],[44,40],[45,46],[47,48],[48,49],[49,50],
+  [51,52],[52,53],[53,54],[51,55],[56,57],[57,58],[58,59],
+  [60,61],[61,62],[62,63],[64,65],[65,66],[67,65],[65,68],
+  [69,70],[70,71],[71,72],[73,74],[74,75],[75,76],[76,73],
+  [77,78],[78,79],[79,80],[80,81],[82,83],[82,84],[84,85],[85,86],[86,87],[87,82],
+  [88,89],[89,90],[90,91],[91,92],[92,93],[93,94],
+  [95,96],[96,97],[97,98],[98,99],[99,100],[100,95],
+  [101,102],[102,103],[103,104],[105,106],[106,107],[107,108],[108,109],[109,110],
+  [111,112],[112,113],[113,114],[115,116],[116,117],[117,118],[118,119],[119,120],
+  [140,141],[141,142],[199,200],[200,201],[201,202],[202,199],
+];
+
+const PLANETS={
+  Mercury:{a:0.38710,e:0.20563,L0:252.25,L1:149472.67,Tp:77.46,Tp1:1.9133,I:7.005,Om:48.33,name:"Mercury",cn:"水星",color:"#c9b07a",sym:"☿"},
+  Venus:{a:0.72333,e:0.00677,L0:181.98,L1:58517.81,Tp:131.53,Tp1:0.5244,I:3.395,Om:76.68,name:"Venus",cn:"金星",color:"#e8d27a",sym:"♀"},
+  Mars:{a:1.52371,e:0.09339,L0:-4.55,L1:19140.30,Tp:336.04,Tp1:1.8497,I:1.850,Om:49.56,name:"Mars",cn:"火星",color:"#e06b4f",sym:"♂"},
+  Jupiter:{a:5.20289,e:0.04855,L0:34.40,L1:3034.91,Tp:14.73,Tp1:1.0126,I:1.303,Om:100.47,name:"Jupiter",cn:"木星",color:"#d8a86a",sym:"♃"},
+  Saturn:{a:9.53700,e:0.05386,L0:50.08,L1:1222.11,Tp:92.43,Tp1:0.9856,I:2.489,Om:113.66,name:"Saturn",cn:"土星",color:"#c9b89a",sym:"♄"},
+};
+
+const CON_NAMES={
+  UMa:{en:"Ursa Major",cn:"大熊座"},UMi:{en:"Ursa Minor",cn:"小熊座"},Cas:{en:"Cassiopeia",cn:"仙后座"},
+  Ori:{en:"Orion",cn:"獵戶座"},CMa:{en:"Canis Major",cn:"大犬座"},CMi:{en:"Canis Minor",cn:"小犬座"},
+  Gem:{en:"Gemini",cn:"雙子座"},Tau:{en:"Taurus",cn:"金牛座"},Aur:{en:"Auriga",cn:"御夫座"},
+  Per:{en:"Perseus",cn:"英仙座"},And:{en:"Andromeda",cn:"仙女座"},Lyr:{en:"Lyra",cn:"天琴座"},
+  Cyg:{en:"Cygnus",cn:"天鵝座"},Aql:{en:"Aquila",cn:"天鷹座"},Boo:{en:"Bootes",cn:"牧夫座"},
+  Vir:{en:"Virgo",cn:"室女座"},Leo:{en:"Leo",cn:"獅子座"},Sco:{en:"Scorpius",cn:"天蠍座"},
+  Sgr:{en:"Sagittarius",cn:"人馬座"},Cru:{en:"Crux",cn:"南十字座"},Cen:{en:"Centaurus",cn:"半人馬座"},
+  Car:{en:"Carina",cn:"船底座"},Eri:{en:"Eridanus",cn:"波江座"},Her:{en:"Hercules",cn:"武仙座"},
+  CrB:{en:"Corona Borealis",cn:"北冕座"},Cap:{en:"Capricornus",cn:"摩羯座"},Aqr:{en:"Aquarius",cn:"寶瓶座"},
+  Psc:{en:"Pisces",cn:"雙魚座"},Ari:{en:"Aries",cn:"白羊座"},PsA:{en:"Piscis Austrinus",cn:"南魚座"},
+  Hya:{en:"Hydra",cn:"長蛇座"},Ser:{en:"Serpens",cn:"巨蛇座"},Lib:{en:"Libra",cn:"天秤座"},
+  Pav:{en:"Pavo",cn:"孔雀座"},Gru:{en:"Grus",cn:"天鶴座"},Tuc:{en:"Tucana",cn:"杜鵑座"},
+  Phe:{en:"Phoenix",cn:"鳳凰座"},Hyi:{en:"Hydrus",cn:"水蛇座"},Vel:{en:"Vela",cn:"船帆座"},
+  Peg:{en:"Pegasus",cn:"飛馬座"},
+};
+
+const TOGGLES={grid:true,lines:true,labels:true,names:true,planets:true};
+
+function julianDay(y,m,d,ut){if(m<=2){y-=1;m+=12}const A=Math.floor(y/100),B=2-A+Math.floor(A/4);const jd=Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+d+B-1524.5;return jd+ut/24}
+function julianCenturies(jd){return(jd-2451545)/36525}
+function gmstDeg(jd){const T=julianCenturies(jd);return norm360(280.46061837+360.98564736629*(jd-2451545)+0.000387933*T*T-T*T*T/38710000)}
+function localSiderealTime(jd,lon){return norm360(gmstDeg(jd)+lon)}
+function eqToHorizon(ra,d,lst,lat){const H=(lst-ra)*D2R,dd=d*D2R,p=lat*D2R;const sa=sin(dd)*sin(p)+cos(dd)*cos(p)*cos(H);const alt=Math.asin(Math.max(-1,Math.min(1,sa)));let az=atan2(-cos(dd)*cos(p)*sin(H),sin(dd)-sin(p)*sa);return{alt:alt*R2D,az:norm360(az*R2D)}}
+function eclToEq(l,b){const ob=23.4393;const lr=l*D2R,br=b*D2R;const e=ob*D2R;const d=Math.asin(sin(br)*cos(e)+cos(br)*sin(e)*sin(lr));let r=atan2(sin(lr)*cos(e)-Math.tan(br)*sin(e),cos(lr));return{ra:norm360(r*R2D),dec:d*R2D}}
+function planetHelioLong(p,T){const L=p.L0+p.L1*T;const M=norm360(L-(p.Tp+p.Tp1*T));const E=M+p.e*R2D*sin(M*D2R);return norm360(p.Om+E)}
+function planetPosition(key,jd,earthLong,earthR){const p=PLANETS[key],T=julianCenturies(jd),r=p.a,lam_p=planetHelioLong(p,T)*D2R,lam_e=earthLong*D2R;const x=r*cos(lam_p)-earthR*cos(lam_e),y=r*sin(lam_p)-earthR*sin(lam_e);const lam=atan2(y,x),dist=sqrt(x*x+y*y);const eq=eclToEq(norm360(lam*R2D),0);const ref={Mercury:0.0,Venus:-4.4,Mars:1.6,Jupiter:-2.7,Saturn:0.5}[key];const mag=ref+5*Math.log10(dist);return{ra:eq.ra,dec:eq.dec,mag,dist}}
+function sunPosition(jd){const T=julianCenturies(jd);const L=norm360(280.46646+36000.76983*T),g=norm360(357.52911+35999.05029*T);const lam=norm360(L+1.915*sin(g*D2R)+0.020*sin(2*g*D2R));return eclToEq(lam,0)}
+function moonPosition(jd){const T=julianCenturies(jd);const Lp=norm360(218.3165+481267.8813*T);const M=norm360(134.9629+477198.8676*T);const D=norm360(297.8502+445267.1114*T);const l=norm360(Lp+6.289*sin(M*D2R));const b=5.128*sin((93.272+483202.0188*T)*D2R);const eq=eclToEq(l,b);const sun=sunPosition(jd);const phaseSrc=sun.ra*D2R-eq.ra*D2R;const phase=(1-cos(phaseSrc))/2;return{ra:eq.ra,dec:eq.dec,phase}}
+function computeEarth(jd){const T=julianCenturies(jd);const L=norm360(100.46435+35999.04968*T),g=norm360(357.52911+35999.05029*T);earthLongCache=norm360(L+1.915*sin(g*D2R)+0.020*sin(2*g*D2R));earthRCache=1.0}
+
+const CX=500,CY=500,R=470;
+function project(az,alt){if(alt<0)return null;const z=90-alt,phi=(az-180)*D2R,rr=R*(z/90);return{x:CX+rr*sin(phi),y:CY+rr*cos(phi)}}
+
+const svg=document.getElementById("sky");
+function clearSvg(){while(svg.firstChild)svg.removeChild(svg.firstChild)}
+function el(tag,attrs){const e=document.createElementNS("http://www.w3.org/2000/svg",tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e}
+function magToR(mag){return Math.max(0.6,6.0-mag*0.85)*respScale()}
+
+let earthLongCache=null,earthRCache=null;
+
+// Zoom, Pan, Responsive
+const vs={cx:500,cy:500,size:1000};
+let panning=false,didDrag=false,psx=0,psy=0,pscx=0,pscy=0;
+function applyViewBox(){const s=vs.size/2;svg.setAttribute("viewBox",`${vs.cx-s} ${vs.cy-s} ${vs.size} ${vs.size}`)}
+function respScale(){const w=svg.getBoundingClientRect().width;return Math.max(0.5,Math.min(3,1000/Math.max(300,w)))}
+function updateFontScale(){svg.style.setProperty('--fs',respScale())}
+svg.addEventListener("wheel",e=>{e.preventDefault();const R=svg.getBoundingClientRect();const rx=(e.clientX-R.left)/R.width,ry=(e.clientY-R.top)/R.height;const wx=vs.cx-vs.size/2+rx*vs.size,wy=vs.cy-vs.size/2+ry*vs.size;const f=e.deltaY>0?1.15:1/1.15;const ns=Math.max(80,Math.min(4000,vs.size*f));vs.cx=wx+(vs.cx-wx)*(ns/vs.size);vs.cy=wy+(vs.cy-wy)*(ns/vs.size);vs.size=ns;applyViewBox()},{passive:false});
+svg.addEventListener("pointerdown",e=>{if(e.target.tagName==="text"||e.target.closest("text"))return;panning=true;didDrag=false;psx=e.clientX;psy=e.clientY;pscx=vs.cx;pscy=vs.cy;svg.setPointerCapture(e.pointerId);svg.classList.add("grabbing")});
+svg.addEventListener("pointermove",e=>{if(!panning)return;const R=svg.getBoundingClientRect(),scale=vs.size/R.width;const dx=e.clientX-psx,dy=e.clientY-psy;if(Math.abs(dx)>3||Math.abs(dy)>3)didDrag=true;vs.cx=pscx-dx*scale;vs.cy=pscy-dy*scale;applyViewBox()});
+svg.addEventListener("pointerup",()=>{panning=false;svg.classList.remove("grabbing")});
+svg.addEventListener("pointercancel",()=>{panning=false;svg.classList.remove("grabbing")});
+
+function drawGrid(){
+  if(!TOGGLES.grid)return;
+  svg.appendChild(el("circle",{cx:CX,cy:CY,r:R,fill:"none",stroke:"#2f3e66","stroke-width":2}));
+  [30,60].forEach(alt=>{const r=R*((90-alt)/90);svg.appendChild(el("circle",{cx:CX,cy:CY,r:r,fill:"none",stroke:"#1d2746","stroke-width":1}));const t=el("text",{x:CX+4,y:CY-r+12,class:"grid-label"});t.textContent=alt+"°";svg.appendChild(t)});
+  [["南",180],["北",0],["東",90],["西",270]].forEach(([n,az])=>{const p=project(az,0.01),p2=project(az,89);svg.appendChild(el("line",{x1:p2.x,y1:p2.y,x2:p.x,y2:p.y,stroke:"#1d2746","stroke-width":1}));const t=el("text",{x:p.x,y:p.y+(az===0?-6:14),class:"grid-label","text-anchor":"middle"});t.textContent=n;svg.appendChild(t)});
+}
+
+function drawConstellationLines(lst,lat){
+  if(!TOGGLES.lines)return;
+  const g=el("g",{id:"conLines",stroke:"#243056","stroke-width":1,opacity:0.7});
+  CONSTELLATION_LINES.forEach(([i,j])=>{const s1=STARS[i],s2=STARS[j];if(!s1||!s2)return;const h1=eqToHorizon(s1.ra,s1.dec,lst,lat),h2=eqToHorizon(s2.ra,s2.dec,lst,lat);const p1=project(h1.az,h1.alt),p2=project(h2.az,h2.alt);if(p1&&p2)g.appendChild(el("line",{class:"con-line","data-con":s1.con,x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y}))});
+  svg.appendChild(g);
+}
+
+function drawConstellationNames(lst,lat){
+  if(!TOGGLES.names)return;
+  const lang=document.getElementById("lang").value;
+  const g=el("g",{});
+  const cons={};
+  STARS.forEach(s=>{if(!cons[s.con])cons[s.con]={ra:0,dec:0,c:0};cons[s.con].ra+=s.ra;cons[s.con].dec+=s.dec;cons[s.con].c++});
+  for(const k in cons){const c=cons[k];c.ra/=c.c;c.dec/=c.c}
+  for(const k in CON_NAMES){
+    if(!cons[k])continue;
+    const c=cons[k];const h=eqToHorizon(c.ra,c.dec,lst,lat);if(h.alt<=0)continue;
+    const p=project(h.az,h.alt);if(!p)continue;
+    const t=el("text",{x:p.x,y:p.y-6,class:"con-label","data-con":k});t.textContent=CON_NAMES[k][lang]||CON_NAMES[k].en;g.appendChild(t);
+  }
+  svg.appendChild(g);
+}
+
+function drawStars(jd,lst,lat,magLimit){
+  const showLabels=TOGGLES.labels;
+  const gStars=el("g",{});
+  let cnt=0;
+  STARS.forEach(s=>{
+    const h=eqToHorizon(s.ra,s.dec,lst,lat);if(h.alt<=0||s.mag>magLimit)return;
+    const p=project(h.az,h.alt);if(!p)return;
+    cnt++;
+    const c=el("circle",{cx:p.x,cy:p.y,r:magToR(s.mag),fill:"#ffffff",opacity:Math.min(1,0.4+s.mag*-0.1+0.7)});
+    gStars.appendChild(c);
+    if(showLabels&&s.mag<=2.0&&s.name){const t=el("text",{x:p.x+4,y:p.y-4,class:"star-label"});t.textContent=starLabel(s);gStars.appendChild(t)}
+  });
+  svg.appendChild(gStars);
+  return cnt;
+}
+
+function drawPlanets(jd,lst,lat,magLimit){
+  if(!TOGGLES.planets)return;
+  const lang=document.getElementById("lang").value;
+  const g=el("g",{});
+  for(const key in PLANETS){const pp=planetPosition(key,jd,earthLongCache,earthRCache);if(pp.mag>magLimit)continue;const h=eqToHorizon(pp.ra,pp.dec,lst,lat);if(h.alt<=0)continue;const p=project(h.az,h.alt);if(!p)continue;const c=el("circle",{cx:p.x,cy:p.y,r:6,fill:PLANETS[key].color,stroke:"#000","stroke-width":1});g.appendChild(c);const t=el("text",{x:p.x+8,y:p.y+4,class:"planet-label",fill:PLANETS[key].color});t.textContent=PLANETS[key].sym+" "+(lang==="cn"?PLANETS[key].cn:PLANETS[key].name);g.appendChild(t)}
+  svg.appendChild(g);
+}
+
+function drawSun(jd,lst,lat){const sun=sunPosition(jd);const h=eqToHorizon(sun.ra,sun.dec,lst,lat);const p=project(h.az,h.alt);if(!p)return;const c=el("circle",{cx:p.x,cy:p.y,r:9,fill:"#ffd35a",stroke:"#ffec9e","stroke-width":2});svg.appendChild(c);const t=el("text",{x:p.x+10,y:p.y+4,class:"planet-label",fill:"#ffd35a"});t.textContent="☉ 太陽";svg.appendChild(t)}
+
+function drawMoon(jd,lst,lat){
+  const m=moonPosition(jd);const h=eqToHorizon(m.ra,m.dec,lst,lat);if(h.alt<=0)return;const p=project(h.az,h.alt);if(!p)return;
+  const g=el("g",{});
+  const c=el("circle",{cx:p.x,cy:p.y,r:8,fill:"#c8d8e8",stroke:"#fff","stroke-width":1.5,opacity:0.9});g.appendChild(c);
+  const isWaxing=m.phase<0.5;
+  if(m.phase>0.02&&m.phase<0.98){const dir=isWaxing?1:-1;const cx=p.x+dir*(8-3);g.appendChild(el("ellipse",{cx:cx,cy:p.y,rx:3,ry:7,fill:isWaxing?"#a0b8d0":"#c8d8e8"}))}
+  const t=el("text",{x:p.x+11,y:p.y+4,class:"planet-label",fill:"#c8d8e8"});t.textContent=document.getElementById("lang").value==="cn"?"☽ 月亮":"☽ Moon";g.appendChild(t);
+  svg.appendChild(g);
+}
+
+function update(){
+  const mins=+document.getElementById("time").value;const hh=Math.floor(mins/60),mm=mins%60;
+  document.getElementById("clock").textContent=String(hh).padStart(2,"0")+":"+String(mm).padStart(2,"0");
+  const y=+document.getElementById("year").value,m=+document.getElementById("month").value,d=+document.getElementById("day").value;
+  const lon=+document.getElementById("lon").value,lat=+document.getElementById("lat").value;
+  const magLimit=+document.getElementById("magLimit").value;document.getElementById("magVal").textContent=magLimit.toFixed(1);
+  const utHours=hh+mm/60-(lon/15);const jd=julianDay(y,m,d,utHours);
+  computeEarth(jd);const lst=localSiderealTime(jd,lon);
+  clearSvg();
+  drawGrid();
+  drawConstellationLines(lst,lat);
+  drawConstellationNames(lst,lat);
+  const cnt=drawStars(jd,lst,lat,magLimit);
+  drawPlanets(jd,lst,lat,magLimit);
+  drawSun(jd,lst,lat);
+  drawMoon(jd,lst,lat);
+  const lstH=Math.floor(lst/15),lstM=Math.floor((lst/15-lstH)*60);
+  document.getElementById("lstVal").textContent=String(lstH).padStart(2,"0")+"h "+String(lstM).padStart(2,"0")+"m";
+  document.getElementById("starCount").textContent=cnt;
+  const moon=moonPosition(jd);const phasePct=Math.round(moon.phase*100);
+  document.getElementById("moonInfo").innerHTML="月相 <b>"+phasePct+"%</b>";
+  document.getElementById("legend").innerHTML="<b>星等 ≤ "+magLimit.toFixed(1)+"</b><br>白點=恆星 · 彩色=行星<br>☉=太陽 · ☽=月亮 · 中心=天頂<br>外圈=地平線";
+}
+
+["year","month","day","lon","lat","magLimit","time","lang"].forEach(id=>{document.getElementById(id).addEventListener("input",update)});
+
+document.getElementById("nowBtn").addEventListener("click",()=>{
+  const now=new Date();const ms=now.getHours()*60+now.getMinutes();
+  document.getElementById("time").value=ms;update();
+});
+
+document.querySelectorAll(".tog-btn").forEach(btn=>{
+  btn.addEventListener("click",()=>{const key=btn.dataset.toggle;TOGGLES[key]=!TOGGLES[key];btn.classList.toggle("on");update()});
+});
+
+function initCities(){
+  const sel=document.getElementById("city");
+  CITIES.forEach((c,i)=>{const o=document.createElement("option");o.value=i;o.textContent=c.name;sel.appendChild(o)});
+  sel.addEventListener("change",()=>{const c=CITIES[+sel.value];document.getElementById("lat").value=c.lat.toFixed(2);document.getElementById("lon").value=c.lon.toFixed(2);update()});
+}
+
+document.addEventListener("keydown",e=>{
+  const ET=new Set(["input","select","textarea"]);
+  if(ET.has(e.target.tagName.toLowerCase()))return;
+  if(e.key==="ArrowLeft"||e.key==="ArrowRight"){const sl=document.getElementById("time");sl.value=Math.max(0,Math.min(1440,+sl.value+(e.key==="ArrowRight"?10:-10)));update();e.preventDefault()}
+  if(e.key==="ArrowUp"||e.key==="ArrowDown"){const sl=document.getElementById("magLimit");sl.value=Math.min(6.5,Math.max(1,+sl.value+(e.key==="ArrowUp"?0.5:-0.5)));update();e.preventDefault()}
+  if(e.key==="g"||e.key==="G"){const btn=document.querySelector('[data-toggle="grid"]');btn.click()}
+  if(e.key==="l"||e.key==="L"){const btn=document.querySelector('[data-toggle="labels"]');btn.click()}
+  if(e.key==="c"||e.key==="C"){const btn=document.querySelector('[data-toggle="lines"]');btn.click()}
+});
+
+(function setupLabelZoom(){
+  let pinned=null;
+  function isLabel(t){return t&&t.tagName==="text"&&(t.classList.contains("star-label")||t.classList.contains("planet-label")||t.classList.contains("con-label"))}
+  function zoom(t){t.classList.add("label-zoom")}
+  function unzoom(t){if(t)t.classList.remove("label-zoom")}
+  function highlightCon(con,on){if(!con)return;document.querySelectorAll("#conLines .con-line[data-con='"+con+"']").forEach(l=>l.classList.toggle("highlight",on))}
+  function handleOver(e){const t=e.target;if(isLabel(t)){zoom(t);if(t.classList.contains("con-label"))highlightCon(t.dataset.con,true)}}
+  function handleOut(e){const t=e.target;if(isLabel(t)){unzoom(t);if(t.classList.contains("con-label"))highlightCon(t.dataset.con,false)}}
+  svg.addEventListener("mouseover",handleOver);
+  svg.addEventListener("mouseout",handleOut);
+  svg.addEventListener("click",e=>{if(didDrag){didDrag=false;return}const t=e.target;if(isLabel(t)){if(pinned===t){unzoom(t);if(t.classList.contains("con-label"))highlightCon(t.dataset.con,false);pinned=null}else{if(pinned){unzoom(pinned);if(pinned.classList.contains("con-label"))highlightCon(pinned.dataset.con,false)}zoom(t);if(t.classList.contains("con-label"))highlightCon(t.dataset.con,true);pinned=t}}else if(pinned){unzoom(pinned);if(pinned.classList.contains("con-label"))highlightCon(pinned.dataset.con,false);pinned=null}});
+})();
+
+const now=new Date();document.getElementById("time").value=now.getHours()*60+now.getMinutes();
+initCities();
+applyViewBox();
+updateFontScale();
+update();
+
+document.getElementById("fsBtn").addEventListener("click",()=>{
+  const m=document.getElementById("mapWrap"),a=document.getElementById("app");
+  const fs=m.classList.toggle("fs");a.classList.toggle("fs");
+  document.getElementById("fsBtn").textContent=fs?"✕ 退出":"⛶ 全螢幕";
+  setTimeout(()=>{applyViewBox();update()},150);
+});
+
+window.addEventListener("resize",()=>{updateFontScale();update()});
+</script>
+</body>
+</html>
