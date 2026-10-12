@@ -90,6 +90,11 @@
     "description": ""
   },
   {
+    "path": "apps/textchange.html",
+    "title": "文字直排轉換器",
+    "description": ""
+  },
+  {
     "path": "apps/timers.html",
     "title": "多功能計時器",
     "description": ""
