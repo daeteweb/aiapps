@@ -30,6 +30,11 @@
     "description": ""
   },
   {
+    "path": "apps/en-oxford-3000.html",
+    "title": "Oxford 3000 英文單字卡",
+    "description": ""
+  },
+  {
     "path": "apps/japanese-vocab.20260319.2250.claude.html",
     "title": "日文單詞記憶卡",
     "description": "目前只有N5的字彙"
